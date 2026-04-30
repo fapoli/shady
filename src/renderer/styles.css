@@ -1,0 +1,309 @@
+:root {
+  color-scheme: dark;
+  --bg: #1a1b26;
+  --bg-soft: #1e2030;
+  --border: #24283b;
+  --fg: #d7defc;
+  --fg-muted: #6f78a8;
+  --fg-dim: #4b5278;
+  --accent: #9d7cd8;
+  --danger: #f7768e;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+.root,
+.view {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+}
+
+body {
+  overflow: hidden;
+  font-family: "Hack Nerd Font";
+  color: var(--fg);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.root.is-resizing > .view,
+.root.is-resizing > .error {
+  display: none !important;
+}
+
+.view {
+  position: fixed;
+  inset: 0;
+}
+
+.editor-drag-region,
+.preview-drag-region {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  -webkit-app-region: drag;
+  z-index: 10;
+}
+
+.view-editor {
+  --editor-top-margin: 60px;
+  --editor-bottom-margin: 16px;
+  --bottom-bar-height: 36px;
+}
+
+.is-fullscreen .view-editor {
+  --editor-top-margin: 32px;
+  --editor-bottom-margin: 8px;
+}
+
+#editor {
+  position: absolute;
+  top: var(--editor-top-margin);
+  left: 0;
+  right: 0;
+  bottom: calc(var(--bottom-bar-height) + var(--editor-bottom-margin));
+  background: var(--bg);
+  border: 0;
+  padding-left: 28px;
+}
+
+#editor .monaco-editor .scroll-decoration,
+#editor .monaco-scrollable-element > .shadow {
+  box-shadow: none !important;
+}
+
+.editor-placeholder {
+  color: var(--fg-muted);
+  font-size: 13px;
+  padding: 0 0 0 28px;
+  text-transform: lowercase;
+}
+
+/* ---- Resource panel (audio / image drop zone shown inside a buffer tab) ---- */
+
+.resource-panel {
+  position: absolute;
+  top: var(--editor-top-margin);
+  left: 0;
+  right: 0;
+  bottom: var(--bottom-bar-height);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.resource-drop-label {
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.resource-remove {
+  font-size: 11px;
+  color: var(--fg-muted);
+  text-decoration: none;
+  font-weight: normal;
+}
+
+.resource-remove:hover {
+  color: var(--danger);
+}
+
+/* ---- Inputs panel ---- */
+
+.inputs-panel {
+  position: absolute;
+  top: var(--editor-top-margin);
+  left: 0;
+  right: 0;
+  bottom: var(--bottom-bar-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.inputs-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  align-items: center;
+}
+
+.inputs-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: normal;
+  color: var(--fg-muted);
+  text-transform: lowercase;
+}
+
+.channel-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: max-content;
+  max-width: 100%;
+}
+
+.inputs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.inputs-label {
+  font-size: 12px;
+  color: var(--fg-dim);
+  min-width: 52px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.inputs-options {
+  display: flex;
+  gap: 3px;
+}
+
+.option-btn {
+  padding: 3px 10px;
+  font-family: "Hack Nerd Font";
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--fg-muted);
+  background: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  border-radius: 3px;
+  text-transform: lowercase;
+  transition: color 0.1s;
+}
+
+.option-btn:hover {
+  color: var(--fg);
+}
+
+.option-btn.active {
+  color: var(--accent);
+  background: var(--bg-soft);
+  border-color: var(--bg-soft);
+}
+
+/* ---- Bottom bar ---- */
+
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 24px;
+  height: var(--bottom-bar-height);
+  border-top: 1px solid var(--bg-soft);
+  background: var(--bg);
+  contain: layout paint style;
+  transform: translateZ(0);
+  z-index: 30;
+  -webkit-app-region: no-drag;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.tab {
+  padding: 4px 12px;
+  font-family: "Hack Nerd Font";
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--fg-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  border-radius: 3px;
+  text-transform: lowercase;
+  transition: color 0.1s;
+}
+
+.tab:hover {
+  color: var(--fg);
+}
+
+.tab.active {
+  color: var(--accent);
+  background: var(--bg-soft);
+}
+
+.hint {
+  margin-left: auto;
+  height: 36px;
+  line-height: 36px;
+  color: var(--fg-muted);
+  font-size: 12px;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+
+.resize-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--fg-muted);
+  pointer-events: none;
+  -webkit-app-region: drag;
+}
+
+.root.is-resizing > .resize-overlay {
+  display: flex;
+}
+
+.resize-size {
+  font-size: 13px;
+  font-weight: normal;
+  letter-spacing: 0;
+  color: var(--accent);
+}
+
+#canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background: var(--bg);
+}
+
+.error {
+  position: fixed;
+  top: 28px;
+  left: 0;
+  right: 0;
+  margin: 0;
+  max-height: 28vh;
+  overflow: auto;
+  padding: 9px 24px;
+  border: 0;
+  background: var(--danger);
+  color: var(--bg);
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  z-index: 20;
+  cursor: pointer;
+}
