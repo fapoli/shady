@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react'
-import { PASS_DEFS, INPUTS_TAB } from '../../../shared/types'
+import { useEffect, useRef, useState } from 'react'
+import { PASS_DEFS, PROJECT_TAB, ProjectSettings } from '../../../shared/types'
 import { TabBar } from './TabBar'
-import { InputsPanel } from './InputsPanel'
+import { ProjectPanel } from './ProjectPanel'
+import { FindWidget } from './FindWidget'
 import { MonacoHandle } from '../hooks/useMonaco'
 import { WebGLHandle } from '../hooks/useWebGL'
 import { INPUT_DRIVERS, SlotType } from '../inputs/registry'
@@ -11,13 +12,19 @@ interface Props {
   webgl:          WebGLHandle
   activeTabIndex: number
   slotTypes:      Record<string, SlotType>
+  projectSettings: ProjectSettings
   hidden:         boolean
   onSwitch:       (index: number) => void
   onSetSlotType:  (slotId: string, type: SlotType) => void
+  onSetProjectSettings: (settings: ProjectSettings) => void
 }
 
-export function EditorView({ monaco, webgl, activeTabIndex, slotTypes, hidden, onSwitch, onSetSlotType }: Props) {
+export function EditorView({
+  monaco, webgl, activeTabIndex, slotTypes, projectSettings, hidden,
+  onSwitch, onSetSlotType, onSetProjectSettings
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const [findOpen, setFindOpen] = useState(false)
   const hideMonaco = import.meta.env.VITE_HIDE_MONACO === '1'
 
   useEffect(() => {
@@ -28,9 +35,9 @@ export function EditorView({ monaco, webgl, activeTabIndex, slotTypes, hidden, o
 
   const activePass = PASS_DEFS[activeTabIndex]
   const activeInputType = activePass?.isBuffer ? slotTypes[activePass.id] : 'shader'
-  const showEditor = activeTabIndex !== INPUTS_TAB && activeInputType === 'shader'
-  const showResource = activeTabIndex !== INPUTS_TAB && activePass?.isBuffer && activeInputType !== 'shader'
-  const showInputs = activeTabIndex === INPUTS_TAB
+  const showEditor = activeTabIndex !== PROJECT_TAB && activeInputType === 'shader'
+  const showResource = activeTabIndex !== PROJECT_TAB && activePass?.isBuffer && activeInputType !== 'shader'
+  const showProject = activeTabIndex === PROJECT_TAB
   const ShaderEditor = INPUT_DRIVERS.shader.Editor
   const ResourceEditor = activeInputType ? INPUT_DRIVERS[activeInputType]?.Editor : null
 
@@ -53,11 +60,23 @@ export function EditorView({ monaco, webgl, activeTabIndex, slotTypes, hidden, o
         />
       )}
 
-      {showInputs && (
-        <InputsPanel slotTypes={slotTypes} onSetSlotType={onSetSlotType} />
+      {showProject && (
+        <ProjectPanel
+          slotTypes={slotTypes}
+          projectSettings={projectSettings}
+          onSetSlotType={onSetSlotType}
+          onSetProjectSettings={onSetProjectSettings}
+        />
       )}
 
-      <div className="bottom-bar">
+      <FindWidget
+        monaco={monaco}
+        activeTabIndex={activeTabIndex}
+        visible={showEditor && !hidden}
+        onOpenChange={setFindOpen}
+      />
+
+      <div className={'bottom-bar' + (findOpen ? ' hidden' : '')}>
         <TabBar activeTabIndex={activeTabIndex} slotTypes={slotTypes} onSwitch={onSwitch} />
         <div className="hint">cmd+enter run &nbsp;|&nbsp; esc return</div>
       </div>

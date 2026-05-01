@@ -62,7 +62,7 @@ Release artifacts are written to `dist/`.
 
 - `Cmd+Enter` / `Ctrl+Enter`: run the shader preview
 - `Esc`: return to the editor
-- `Cmd+0` / `Ctrl+0`: inputs
+- `Cmd+0` / `Ctrl+0`: project
 - `Cmd+1-5` / `Ctrl+1-5`: switch shader tabs
 
 ## Shader Notes

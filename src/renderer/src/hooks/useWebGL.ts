@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import type * as Monaco from 'monaco-editor'
-import { PASS_DEFS, BUFFER_IDS } from '../../../shared/types'
+import { DEFAULT_PROJECT_SETTINGS, PASS_DEFS, BUFFER_IDS, ProjectSettings } from '../../../shared/types'
 import {
   buildProgram, destroyProgram, createFboPair, destroyFboPair, swapFboPair,
   bindUniforms, CompiledPass, FboPair
@@ -21,7 +21,12 @@ export interface WebGLHandle {
   canvasRef: React.RefObject<HTMLCanvasElement | null>
   audioNames: Record<string, string | null>
   imageNames: Record<string, string | null>
-  start(models: (Monaco.editor.ITextModel | null)[], slotTypes: Record<string, SlotType>): string[]
+  start(
+    models: (Monaco.editor.ITextModel | null)[],
+    slotTypes: Record<string, SlotType>,
+    projectSettings: ProjectSettings,
+  ): string[]
+  setProjectSettings(settings: ProjectSettings): void
   stop(): void
   cleanup(): void
   loadInput(type: SlotType, slotId: string, file: File): Promise<void>
@@ -31,7 +36,7 @@ export interface WebGLHandle {
   applyProjectChannels(channels: Record<string, LoadedChannel>): Promise<void>
 }
 
-export function useWebGL(): WebGLHandle {
+export function useWebGL(onProjectChange?: () => void): WebGLHandle {
   const canvasRef  = useRef<HTMLCanvasElement>(null)
   const glRef      = useRef<WebGL2RenderingContext | null>(null)
   const rafRef     = useRef<number | null>(null)
@@ -40,6 +45,7 @@ export function useWebGL(): WebGLHandle {
   const [audioNames, setAudioNames] = useState<Record<string, string | null>>({})
   const [imageNames, setImageNames] = useState<Record<string, string | null>>({})
   const inputRuntimes = useRef<Partial<Record<SlotType, InputRuntime>>>({})
+  const projectSettingsRef = useRef<ProjectSettings>(DEFAULT_PROJECT_SETTINGS)
 
   // Runtime
   const mouseState  = useRef<[number,number,number,number]>([0,0,0,0])
@@ -52,6 +58,19 @@ export function useWebGL(): WebGLHandle {
   const isWindowResizing = useRef(false)
   const resizeTimer = useRef<number | null>(null)
 
+  const applyProjectSettings = useCallback((settings: ProjectSettings) => {
+    projectSettingsRef.current = { ...DEFAULT_PROJECT_SETTINGS, ...settings }
+  }, [])
+
+  function canvasMousePosition(event: MouseEvent): [number, number] {
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
+    const dpr  = window.devicePixelRatio || 1
+    return [
+      (event.clientX - rect.left) * dpr,
+      canvas.height - (event.clientY - rect.top) * dpr,
+    ]
+  }
 
   function getDroppedFilePath(file: File): string | null {
     const filePath = window.api.getPathForFile(file) || (file as unknown as { path?: string }).path
@@ -67,18 +86,20 @@ export function useWebGL(): WebGLHandle {
 
       canvas.addEventListener('mousedown', (e) => {
         mouseDown.current = true
-        const rect = canvas.getBoundingClientRect()
-        const dpr  = window.devicePixelRatio || 1
-        const x    = (e.clientX - rect.left) * dpr
-        const y    = canvas.height - (e.clientY - rect.top) * dpr
+        const [x, y] = canvasMousePosition(e)
         mouseState.current = [x, y, x, y]
       })
       canvas.addEventListener('mousemove', (e) => {
-        if (!mouseDown.current) return
-        const rect = canvas.getBoundingClientRect()
-        const dpr  = window.devicePixelRatio || 1
-        mouseState.current[0] = (e.clientX - rect.left) * dpr
-        mouseState.current[1] = canvas.height - (e.clientY - rect.top) * dpr
+        const hoverTracking = projectSettingsRef.current.mouseTracking === 'hover'
+        if (!mouseDown.current && !hoverTracking) return
+
+        const [x, y] = canvasMousePosition(e)
+        mouseState.current[0] = x
+        mouseState.current[1] = y
+        if (hoverTracking && !mouseDown.current) {
+          mouseState.current[2] = x
+          mouseState.current[3] = y
+        }
       })
       canvas.addEventListener('mouseup', () => {
         mouseDown.current = false
@@ -170,7 +191,9 @@ export function useWebGL(): WebGLHandle {
   const start = useCallback((
     models: (Monaco.editor.ITextModel | null)[],
     slotTypes: Record<string, SlotType>,
+    projectSettings: ProjectSettings,
   ): string[] => {
+    applyProjectSettings(projectSettings)
     const gl = getGl()
     const errors: string[] = []
 
@@ -273,7 +296,7 @@ export function useWebGL(): WebGLHandle {
 
     rafRef.current = window.requestAnimationFrame(renderFrame)
     return []
-  }, [])
+  }, [applyProjectSettings])
 
   const stop = useCallback(() => {
     if (rafRef.current) { window.cancelAnimationFrame(rafRef.current); rafRef.current = null }
@@ -294,11 +317,13 @@ export function useWebGL(): WebGLHandle {
 
   const loadInput = useCallback(async (type: SlotType, slotId: string, file: File) => {
     await getInputRuntime(type)?.load?.(slotId, file)
-  }, [])
+    onProjectChange?.()
+  }, [onProjectChange])
 
   const clearInput = useCallback((type: SlotType, slotId: string) => {
     getInputRuntime(type)?.clear?.(slotId)
-  }, [])
+    onProjectChange?.()
+  }, [onProjectChange])
 
   const serializeInput = useCallback((type: SlotType, slotId: string): SaveChannelEntry => {
     return {
@@ -337,5 +362,6 @@ export function useWebGL(): WebGLHandle {
     serializeInput,
     restoreSlots,
     applyProjectChannels,
+    setProjectSettings: applyProjectSettings,
   }
 }

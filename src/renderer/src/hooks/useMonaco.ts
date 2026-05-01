@@ -79,6 +79,9 @@ export function useMonaco(
       })
 
       editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => onRunRef.current())
+      editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyF, () => {
+        window.dispatchEvent(new CustomEvent('shady:open-find'))
+      })
       editor.addCommand(monaco.KeyCode.Escape, () => onBackRef.current())
 
       const scheduleLayout = () => {

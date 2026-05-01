@@ -82,6 +82,84 @@ body {
   box-shadow: none !important;
 }
 
+.shady-find-widget {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--bottom-bar-height);
+  padding: 0 24px;
+  color: var(--fg-muted);
+  background: var(--bg);
+  border-top: 1px solid var(--bg-soft);
+  -webkit-app-region: no-drag;
+}
+
+.shady-find-prompt {
+  color: var(--accent);
+  font-size: 13px;
+  line-height: var(--bottom-bar-height);
+}
+
+.shady-find-input {
+  flex: 1;
+  min-width: 0;
+  height: 24px;
+  padding: 0;
+  font-family: "Hack Nerd Font";
+  font-size: 13px;
+  color: var(--fg);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  caret-color: var(--accent);
+  outline: none;
+}
+
+.shady-find-count {
+  min-width: 52px;
+  margin-left: 12px;
+  margin-right: 8px;
+  color: var(--fg-muted);
+  font-size: 11px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.shady-find-btn {
+  width: auto;
+  height: 24px;
+  padding: 0;
+  font-family: "Hack Nerd Font";
+  font-size: 11px;
+  line-height: 24px;
+  color: var(--fg-dim);
+  background: none;
+  border: 0;
+  border-radius: 0;
+  cursor: pointer;
+  text-transform: lowercase;
+}
+
+.shady-find-btn:hover,
+.shady-find-btn:focus-visible {
+  color: var(--accent);
+  background: transparent;
+  outline: none;
+}
+
+.shady-find-match {
+  background: color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.shady-find-match-current {
+  background: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
 .editor-placeholder {
   color: var(--fg-muted);
   font-size: 13px;
@@ -120,28 +198,32 @@ body {
   color: var(--danger);
 }
 
-/* ---- Inputs panel ---- */
+/* ---- Project panel ---- */
 
-.inputs-panel {
+.project-panel {
   position: absolute;
   top: var(--editor-top-margin);
   left: 0;
   right: 0;
   bottom: var(--bottom-bar-height);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 32px;
+  padding: 0 0 0 28px;
 }
 
-.inputs-content {
+.project-content {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  align-items: center;
+  gap: 24px;
+  width: min(680px, calc(100% - 56px));
 }
 
-.inputs-title {
+.project-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.project-title {
   margin: 0;
   font-size: 13px;
   font-weight: normal;
@@ -149,7 +231,7 @@ body {
   text-transform: lowercase;
 }
 
-.channel-rows {
+.project-rows {
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -157,21 +239,22 @@ body {
   max-width: 100%;
 }
 
-.inputs-row {
-  display: flex;
+.project-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 18px;
+  min-height: 24px;
 }
 
-.inputs-label {
+.project-label {
   font-size: 12px;
   color: var(--fg-dim);
-  min-width: 52px;
-  text-align: right;
-  flex-shrink: 0;
+  text-align: left;
+  white-space: nowrap;
 }
 
-.inputs-options {
+.project-options {
   display: flex;
   gap: 3px;
 }

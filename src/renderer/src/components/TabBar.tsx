@@ -1,4 +1,4 @@
-import { PASS_DEFS, INPUTS_TAB } from '../../../shared/types'
+import { PASS_DEFS, PROJECT_TAB } from '../../../shared/types'
 import type { SlotType } from '../inputs/registry'
 
 interface Props {
@@ -26,10 +26,10 @@ export function TabBar({ activeTabIndex, slotTypes, onSwitch }: Props) {
         </button>
       ))}
       <button
-        className={'tab tab-inputs' + (activeTabIndex === INPUTS_TAB ? ' active' : '')}
-        onClick={() => onSwitch(INPUTS_TAB)}
+        className={'tab tab-project' + (activeTabIndex === PROJECT_TAB ? ' active' : '')}
+        onClick={() => onSwitch(PROJECT_TAB)}
       >
-        0 inputs
+        0 project
       </button>
     </nav>
   )

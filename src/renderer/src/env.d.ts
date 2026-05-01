@@ -1,5 +1,11 @@
 /// <reference types="vite/client" />
 
+type MouseTrackingMode = 'drag' | 'hover'
+
+interface ProjectSettings {
+  mouseTracking: MouseTrackingMode
+}
+
 interface SaveChannelEntry {
   type: string
   filePath?: string
@@ -9,6 +15,7 @@ interface SaveChannelEntry {
 interface SavePayload {
   shaders: Record<string, string>
   channels: Record<string, SaveChannelEntry>
+  settings?: ProjectSettings
 }
 
 interface LoadedChannel {
@@ -20,6 +27,7 @@ interface LoadedChannel {
 interface LoadedProject {
   shaders: Record<string, string>
   channels: Record<string, LoadedChannel>
+  settings?: ProjectSettings
   projectPath: string
 }
 

@@ -13,4 +13,14 @@ export const PASS_DEFS: PassDef[] = [
 ]
 
 export const BUFFER_IDS = ['bufferA', 'bufferB', 'bufferC', 'bufferD'] as const
-export const INPUTS_TAB = 5
+export const PROJECT_TAB = 5
+
+export type MouseTrackingMode = 'drag' | 'hover'
+
+export interface ProjectSettings {
+  mouseTracking: MouseTrackingMode
+}
+
+export const DEFAULT_PROJECT_SETTINGS: ProjectSettings = {
+  mouseTracking: 'drag',
+}

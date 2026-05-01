@@ -11,6 +11,9 @@ interface SaveChannelEntry {
 interface SavePayload {
   shaders: Record<string, string>
   channels: Record<string, SaveChannelEntry>
+  settings?: {
+    mouseTracking?: 'drag' | 'hover'
+  }
 }
 
 function toProjectRelativePath(projectPath: string, filePath: string): string {
@@ -58,7 +61,7 @@ async function writeProject(folderPath: string, payload: SavePayload): Promise<v
 
   await fs.promises.writeFile(
     path.join(folderPath, 'project.json'),
-    JSON.stringify({ version: 1, channels }, null, 2),
+    JSON.stringify({ version: 1, channels, settings: payload.settings }, null, 2),
     'utf-8'
   )
 }
@@ -90,7 +93,11 @@ ipcMain.handle('load-project', async () => {
 
   const folder = filePaths[0]
 
-  let config: { version: number; channels: Record<string, { type: string; filePath?: string }> }
+  let config: {
+    version: number
+    channels: Record<string, { type: string; filePath?: string }>
+    settings?: { mouseTracking?: 'drag' | 'hover' }
+  }
   try {
     config = JSON.parse(await fs.promises.readFile(path.join(folder, 'project.json'), 'utf-8'))
   } catch {
@@ -118,7 +125,7 @@ ipcMain.handle('load-project', async () => {
     }
   }
 
-  return { shaders, channels, projectPath: folder }
+  return { shaders, channels, settings: config.settings, projectPath: folder }
 })
 
 function createMenu(win: BrowserWindow): void {
