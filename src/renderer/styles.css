@@ -34,9 +34,12 @@ body {
   display: none !important;
 }
 
-.root.is-resizing > .view,
-.root.is-resizing > .error {
+.root.is-resizing > .view-editor {
   display: none !important;
+}
+
+.root.is-resizing > .view-preview {
+  display: block !important;
 }
 
 .view {
@@ -50,7 +53,7 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 28px;
+  height: calc(28px + env(safe-area-inset-top, 0px));
   -webkit-app-region: drag;
   z-index: 10;
 }
@@ -62,7 +65,7 @@ body {
 }
 
 .is-fullscreen .view-editor {
-  --editor-top-margin: 32px;
+  --editor-top-margin: calc(32px + env(safe-area-inset-top, 0px));
   --editor-bottom-margin: 8px;
 }
 
@@ -160,6 +163,77 @@ body {
   background: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
+.monaco-editor .shady-diagnostic-line {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  border-left: 3px solid var(--danger);
+}
+
+.monaco-editor .shady-diagnostic-gutter {
+  background: var(--danger);
+  width: 4px !important;
+  margin-left: 4px;
+}
+
+.shady-diagnostic-tooltip {
+  position: fixed;
+  z-index: 80;
+  display: none;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 8px 10px;
+  color: var(--bg);
+  background: var(--danger);
+  border: 0;
+  border-radius: 3px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+  font-family: "Hack Nerd Font";
+  font-size: 12px;
+  line-height: 18px;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
+.shady-diagnostic-tooltip.visible {
+  display: block;
+}
+
+.compile-error-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 35;
+  min-height: 28px;
+  max-height: 96px;
+  overflow: auto;
+  padding: 6px 24px;
+  color: var(--bg);
+  background: var(--danger);
+  font-family: "Hack Nerd Font";
+  font-size: 12px;
+  line-height: 16px;
+  white-space: pre-wrap;
+  cursor: pointer;
+}
+
+.export-status-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 36;
+  min-height: 28px;
+  padding: 6px 24px;
+  color: #10120d;
+  background: #a6e3a1;
+  border-top: 1px solid #a6e3a1;
+  font-family: "Hack Nerd Font";
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .editor-placeholder {
   color: var(--fg-muted);
   font-size: 13px;
@@ -180,6 +254,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 8px;
+  cursor: pointer;
 }
 
 .resource-drop-label {
@@ -187,11 +262,24 @@ body {
   color: var(--fg-muted);
 }
 
+.resource-error {
+  font-size: 11px;
+}
+
+.resource-error {
+  color: var(--danger);
+}
+
+.resource-file-input {
+  display: none;
+}
+
 .resource-remove {
   font-size: 11px;
   color: var(--fg-muted);
   text-decoration: none;
   font-weight: normal;
+  cursor: pointer;
 }
 
 .resource-remove:hover {
@@ -277,6 +365,13 @@ body {
   color: var(--fg);
 }
 
+.tab:focus,
+.option-btn:focus,
+.resource-remove:focus,
+.shady-find-btn:focus {
+  outline: none;
+}
+
 .option-btn.active {
   color: var(--accent);
   background: var(--bg-soft);
@@ -305,10 +400,17 @@ body {
 
 .tabs {
   display: flex;
+  flex: 0 1 auto;
   gap: 4px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
   padding: 4px 12px;
   font-family: "Hack Nerd Font";
   font-size: 12px;
@@ -339,6 +441,28 @@ body {
   font-size: 12px;
   text-transform: lowercase;
   white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .bottom-bar {
+    gap: 8px;
+    padding: 0 12px;
+  }
+
+  .tab {
+    width: 26px;
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .tab-label {
+    display: none;
+  }
+
+  .hint {
+    font-size: 11px;
+  }
 }
 
 .resize-overlay {
@@ -372,21 +496,27 @@ body {
   background: var(--bg);
 }
 
-.error {
+.stats-overlay {
   position: fixed;
-  top: 28px;
-  left: 0;
-  right: 0;
-  margin: 0;
-  max-height: 28vh;
-  overflow: auto;
-  padding: 9px 24px;
-  border: 0;
-  background: var(--danger);
-  color: var(--bg);
-  font-size: 12px;
-  line-height: 18px;
-  white-space: pre-wrap;
+  bottom: 8px;
+  right: 10px;
   z-index: 20;
-  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  color: #ffffff;
+  background: #000000;
+  border-radius: 2px;
+  font-family: "Hack Nerd Font";
+  font-size: 11px;
+  line-height: 14px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.stats-overlay span + span::before {
+  content: "|";
+  margin: 0 2px 0 -2px;
+  color: #777777;
 }

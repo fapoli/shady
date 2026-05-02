@@ -14,19 +14,44 @@ interface PassState {
   fboPair:   FboPair | null
 }
 
+export interface CompileDiagnostic {
+  passIndex: number
+  line: number
+  message: string
+}
+
+interface CompileResult {
+  messages: string[]
+  diagnostics: CompileDiagnostic[]
+}
+
+export interface RenderStats {
+  fps: number
+  frameMs: number
+  width: number
+  height: number
+  dpr: number
+  scale: number
+}
+
 const RESIZE_SETTLE_MS = 90
 const RENDER_RESUME_MS = 120
+const STATS_SAMPLE_MS = 1000
+const GLSL_INFO_LOG_LINE_RE = /ERROR:\s*\d+:(\d+):\s*(.*)/g
 
 export interface WebGLHandle {
   canvasRef: React.RefObject<HTMLCanvasElement | null>
+  stats: RenderStats
   audioNames: Record<string, string | null>
   imageNames: Record<string, string | null>
+  resourceErrors: Record<string, string | null>
   start(
     models: (Monaco.editor.ITextModel | null)[],
     slotTypes: Record<string, SlotType>,
     projectSettings: ProjectSettings,
-  ): string[]
+  ): CompileResult
   setProjectSettings(settings: ProjectSettings): void
+  togglePlaybackPaused(): boolean
   stop(): void
   cleanup(): void
   loadInput(type: SlotType, slotId: string, file: File): Promise<void>
@@ -44,6 +69,8 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
 
   const [audioNames, setAudioNames] = useState<Record<string, string | null>>({})
   const [imageNames, setImageNames] = useState<Record<string, string | null>>({})
+  const [resourceErrors, setResourceErrors] = useState<Record<string, string | null>>({})
+  const [stats, setStats] = useState<RenderStats>({ fps: 0, frameMs: 0, width: 0, height: 0, dpr: 1, scale: 1 })
   const inputRuntimes = useRef<Partial<Record<SlotType, InputRuntime>>>({})
   const projectSettingsRef = useRef<ProjectSettings>(DEFAULT_PROJECT_SETTINGS)
 
@@ -57,18 +84,39 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
   const pendingSize = useRef<{ w: number; h: number; changedAt: number } | null>(null)
   const isWindowResizing = useRef(false)
   const resizeTimer = useRef<number | null>(null)
+  const isPlaybackPaused = useRef(false)
+  const pausedAtMs = useRef(0)
+  const pausedDurationMs = useRef(0)
+  const statsFrames = useRef(0)
+  const statsSampleStartMs = useRef(0)
 
   const applyProjectSettings = useCallback((settings: ProjectSettings) => {
     projectSettingsRef.current = { ...DEFAULT_PROJECT_SETTINGS, ...settings }
   }, [])
 
+  function currentResolutionScale(): number {
+    const dpr = window.devicePixelRatio || 1
+    switch (projectSettingsRef.current.resolutionScale) {
+      case '0.5': return 0.5
+      case '1': return 1
+      case '2': return 2
+      case 'auto':
+      default: return dpr
+    }
+  }
+
+  function effectiveCanvasScale(canvas: HTMLCanvasElement): number {
+    return canvas.clientWidth > 0 ? canvas.width / canvas.clientWidth : currentResolutionScale()
+  }
+
   function canvasMousePosition(event: MouseEvent): [number, number] {
     const canvas = canvasRef.current!
     const rect = canvas.getBoundingClientRect()
-    const dpr  = window.devicePixelRatio || 1
+    const scaleX = rect.width > 0 ? canvas.width / rect.width : currentResolutionScale()
+    const scaleY = rect.height > 0 ? canvas.height / rect.height : currentResolutionScale()
     return [
-      (event.clientX - rect.left) * dpr,
-      canvas.height - (event.clientY - rect.top) * dpr,
+      (event.clientX - rect.left) * scaleX,
+      canvas.height - (event.clientY - rect.top) * scaleY,
     ]
   }
 
@@ -115,7 +163,13 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
     if (!inputRuntimes.current[type]) {
       const createRuntime = INPUT_DRIVERS[type]?.createRuntime
       if (!createRuntime) return null
-      const context: InputRuntimeContext = { getGl, getDroppedFilePath, setAudioNames, setImageNames }
+      const context: InputRuntimeContext = {
+        getGl,
+        getDroppedFilePath,
+        setAudioNames,
+        setImageNames,
+        setResourceErrors,
+      }
       inputRuntimes.current[type] = createRuntime(context)
     }
     return inputRuntimes.current[type] ?? null
@@ -123,6 +177,32 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
 
   function getShaderTexture(slotId: string): WebGLTexture | null {
     return passesRef.current[PASS_DEFS.findIndex(d => d.id === slotId)]?.fboPair?.texRead ?? null
+  }
+
+  function toSourceLine(logLine: number, source: string): number {
+    const versionLine = source.split('\n').findIndex(line => line.trimStart().startsWith('#version')) + 1
+    const injectedDefineLine = versionLine > 0
+    const sourceLine = injectedDefineLine && logLine > versionLine ? logLine - 1 : logLine
+    return Math.max(1, Math.min(sourceLine, source.split('\n').length))
+  }
+
+  function parseCompileDiagnostics(passIndex: number, source: string, message: string): CompileDiagnostic[] {
+    const diagnostics: CompileDiagnostic[] = []
+    GLSL_INFO_LOG_LINE_RE.lastIndex = 0
+
+    for (const match of message.matchAll(GLSL_INFO_LOG_LINE_RE)) {
+      const logLine = Number(match[1])
+      const detail = match[2]?.trim() || message
+      diagnostics.push({
+        passIndex,
+        line: Number.isFinite(logLine) ? toSourceLine(logLine, source) : 1,
+        message: detail,
+      })
+    }
+
+    return diagnostics.length > 0
+      ? diagnostics
+      : [{ passIndex, line: 1, message }]
   }
 
   useEffect(() => {
@@ -164,9 +244,9 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
 
   function resizeCanvas(force = false, nowMs = performance.now()): void {
     const canvas = canvasRef.current!
-    const dpr = window.devicePixelRatio || 1
-    const w   = Math.max(1, Math.floor(canvas.clientWidth  * dpr))
-    const h   = Math.max(1, Math.floor(canvas.clientHeight * dpr))
+    const scale = currentResolutionScale()
+    const w   = Math.max(1, Math.floor(canvas.clientWidth  * scale))
+    const h   = Math.max(1, Math.floor(canvas.clientHeight * scale))
     if (w === lastSize.current.w && h === lastSize.current.h) {
       pendingSize.current = null
       return
@@ -192,10 +272,11 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
     models: (Monaco.editor.ITextModel | null)[],
     slotTypes: Record<string, SlotType>,
     projectSettings: ProjectSettings,
-  ): string[] => {
+  ): CompileResult => {
     applyProjectSettings(projectSettings)
     const gl = getGl()
-    const errors: string[] = []
+    const messages: string[] = []
+    const diagnostics: CompileDiagnostic[] = []
 
     // Compile all passes
     PASS_DEFS.forEach((def, i) => {
@@ -214,11 +295,13 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
         if (state.compiled) destroyProgram(gl, state.compiled)
         state.compiled = compiled
       } catch (err) {
-        errors.push(`[${def.label}] ${(err as Error).message}`)
+        const message = (err as Error).message
+        messages.push(`[${def.label}] ${message}`)
+        diagnostics.push(...parseCompileDiagnostics(i, source, message))
       }
     })
 
-    if (errors.length > 0) return errors
+    if (messages.length > 0) return { messages, diagnostics }
 
     resizeCanvas(true)
     const { w, h } = lastSize.current
@@ -233,14 +316,31 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
       }
       getInputRuntime(type)?.prepare?.(def.id)
     })
-
     if (rafRef.current) window.cancelAnimationFrame(rafRef.current)
     frameCount.current  = 0
     prevTimeMs.current  = 0
     startTimeMs.current = performance.now()
+    isPlaybackPaused.current = false
+    pausedAtMs.current = 0
+    pausedDurationMs.current = 0
+    statsFrames.current = 0
+    statsSampleStartMs.current = startTimeMs.current
+    setStats({
+      fps: 0,
+      frameMs: 0,
+      width: canvasRef.current?.clientWidth ?? 0,
+      height: canvasRef.current?.clientHeight ?? 0,
+      dpr: window.devicePixelRatio || 1,
+      scale: canvasRef.current ? effectiveCanvasScale(canvasRef.current) : currentResolutionScale(),
+    })
 
     function renderFrame(nowMs: number): void {
       resizeCanvas(false, nowMs)
+      if (isPlaybackPaused.current) {
+        rafRef.current = window.requestAnimationFrame(renderFrame)
+        return
+      }
+
       if (isWindowResizing.current) {
         rafRef.current = window.requestAnimationFrame(renderFrame)
         return
@@ -248,7 +348,7 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
 
       const canvas = canvasRef.current!
       const w = canvas.width, h = canvas.height
-      const elapsed   = (nowMs - startTimeMs.current) / 1000
+      const elapsed   = (nowMs - startTimeMs.current - pausedDurationMs.current) / 1000
       const timeDelta = prevTimeMs.current === 0 ? 0 : (nowMs - prevTimeMs.current) / 1000
       prevTimeMs.current = nowMs
 
@@ -291,17 +391,59 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
       }
 
       frameCount.current++
+      statsFrames.current++
+      if (nowMs - statsSampleStartMs.current >= STATS_SAMPLE_MS) {
+        const sampleMs = nowMs - statsSampleStartMs.current
+        setStats({
+          fps: Math.round((statsFrames.current * 1000) / sampleMs),
+          frameMs: sampleMs / statsFrames.current,
+          width: canvas.clientWidth,
+          height: canvas.clientHeight,
+          dpr: window.devicePixelRatio || 1,
+          scale: effectiveCanvasScale(canvas),
+        })
+        statsFrames.current = 0
+        statsSampleStartMs.current = nowMs
+      }
       rafRef.current = window.requestAnimationFrame(renderFrame)
     }
 
     rafRef.current = window.requestAnimationFrame(renderFrame)
-    return []
+    return { messages: [], diagnostics: [] }
   }, [applyProjectSettings])
+
+  const togglePlaybackPaused = useCallback(() => {
+    if (!rafRef.current) return false
+
+    const nowMs = performance.now()
+    isPlaybackPaused.current = !isPlaybackPaused.current
+
+    if (isPlaybackPaused.current) {
+      pausedAtMs.current = nowMs
+      setStats(value => ({ ...value, fps: 0, frameMs: 0 }))
+      Object.values(inputRuntimes.current).forEach(runtime => runtime?.pause?.(BUFFER_IDS))
+      return true
+    }
+
+    pausedDurationMs.current += nowMs - pausedAtMs.current
+    pausedAtMs.current = 0
+    prevTimeMs.current = 0
+    statsFrames.current = 0
+    statsSampleStartMs.current = nowMs
+    Object.values(inputRuntimes.current).forEach(runtime => runtime?.resume?.(BUFFER_IDS))
+    return false
+  }, [])
 
   const stop = useCallback(() => {
     if (rafRef.current) { window.cancelAnimationFrame(rafRef.current); rafRef.current = null }
     mouseState.current = [0, 0, 0, 0]
     mouseDown.current  = false
+    isPlaybackPaused.current = false
+    pausedAtMs.current = 0
+    pausedDurationMs.current = 0
+    statsFrames.current = 0
+    statsSampleStartMs.current = 0
+    setStats({ fps: 0, frameMs: 0, width: 0, height: 0, dpr: window.devicePixelRatio || 1, scale: currentResolutionScale() })
     Object.values(inputRuntimes.current).forEach(runtime => runtime?.stop?.(BUFFER_IDS))
   }, [])
 
@@ -352,11 +494,14 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
 
   return {
     canvasRef,
+    stats,
     audioNames,
     imageNames,
+    resourceErrors,
     start,
     stop,
     cleanup,
+    togglePlaybackPaused,
     loadInput,
     clearInput,
     serializeInput,

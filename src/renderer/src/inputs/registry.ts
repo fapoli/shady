@@ -17,13 +17,13 @@ export const INPUT_DRIVERS = {
     type: 'audio',
     label: 'audio',
     Editor: AudioInput,
-    createRuntime: ctx => createAudioInputRuntime(ctx.getGl, ctx.getDroppedFilePath, ctx.setAudioNames),
+    createRuntime: ctx => createAudioInputRuntime(ctx.getGl, ctx.getDroppedFilePath, ctx.setAudioNames, ctx.setResourceErrors),
   },
   image: {
     type: 'image',
     label: 'image',
     Editor: ImageInput,
-    createRuntime: ctx => createImageInputRuntime(ctx.getGl, ctx.getDroppedFilePath, ctx.setImageNames),
+    createRuntime: ctx => createImageInputRuntime(ctx.getGl, ctx.getDroppedFilePath, ctx.setImageNames, ctx.setResourceErrors),
   },
   microphone: {
     type: 'microphone',

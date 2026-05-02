@@ -3,6 +3,8 @@ const ANALYSER_SIZE = 512
 export interface AudioInstance {
   loadFile(file: File): Promise<void>
   play(): void
+  pause(): void
+  resume(): void
   stop(): void
   restore(filePath: string): Promise<void>
   unload(): void
@@ -42,6 +44,15 @@ export function createAudioInstance(): AudioInstance {
     audioSource.loop   = true
     audioSource.connect(analyser!)
     audioSource.start()
+    void audioContext!.resume()
+  }
+
+  function pause(): void {
+    if (audioContext?.state === 'running') void audioContext.suspend()
+  }
+
+  function resume(): void {
+    if (audioContext?.state === 'suspended') void audioContext.resume()
   }
 
   function stop(): void {
@@ -84,5 +95,5 @@ export function createAudioInstance(): AudioInstance {
     return tex
   }
 
-  return { loadFile, play, stop, restore, unload, fillTexture, createTexture }
+  return { loadFile, play, pause, resume, stop, restore, unload, fillTexture, createTexture }
 }

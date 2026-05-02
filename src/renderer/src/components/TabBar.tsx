@@ -20,16 +20,20 @@ export function TabBar({ activeTabIndex, slotTypes, onSwitch }: Props) {
         <button
           key={pass.id}
           className={'tab' + (i === activeTabIndex ? ' active' : '')}
+          tabIndex={-1}
           onClick={() => onSwitch(i)}
         >
-          {i + 1} {tabLabel(pass, slotTypes)}
+          <span>{i + 1}</span>
+          <span className="tab-label">{tabLabel(pass, slotTypes)}</span>
         </button>
       ))}
       <button
         className={'tab tab-project' + (activeTabIndex === PROJECT_TAB ? ' active' : '')}
+        tabIndex={-1}
         onClick={() => onSwitch(PROJECT_TAB)}
       >
-        0 project
+        <span>0</span>
+        <span className="tab-label">project</span>
       </button>
     </nav>
   )

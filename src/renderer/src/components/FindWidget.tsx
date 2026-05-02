@@ -55,7 +55,7 @@ export function FindWidget({ monaco, activeTabIndex, visible, onOpenChange }: Pr
   useEffect(() => {
     const onOpenFind = () => openFind()
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'f') {
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'f') {
         event.preventDefault()
         event.stopPropagation()
         openFind()
@@ -177,10 +177,10 @@ export function FindWidget({ monaco, activeTabIndex, visible, onOpenChange }: Pr
         aria-label="find"
       />
       <span className="shady-find-count">{current}/{count}</span>
-      <button className="shady-find-btn" type="button" onClick={() => move(-1)} aria-label="previous match">
+      <button className="shady-find-btn" type="button" tabIndex={-1} onClick={() => move(-1)} aria-label="previous match">
         prev
       </button>
-      <button className="shady-find-btn" type="submit" aria-label="next match">
+      <button className="shady-find-btn" type="submit" tabIndex={-1} aria-label="next match">
         next
       </button>
     </form>

@@ -1,13 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { DEFAULT_PROJECT_SETTINGS, PASS_DEFS, PROJECT_TAB, ProjectSettings } from '../../shared/types'
-import { isRunShortcut, isBackToEditorShortcut, getSwitchTabIndex } from '../../shared/shortcuts'
+import type * as Monaco from 'monaco-editor'
+import { DEFAULT_PROJECT_SETTINGS, PASS_DEFS, PROJECT_TAB, ProjectSettings, ResolutionScale } from '../../shared/types'
+import {
+  isRunShortcut, isBackToEditorShortcut, isPausePlaybackShortcut, isFpsCounterShortcut, getSwitchTabIndex
+} from '../../shared/shortcuts'
 import { useMonaco } from './hooks/useMonaco'
 import { useWebGL } from './hooks/useWebGL'
 import { EditorView } from './components/EditorView'
 import { PreviewView } from './components/PreviewView'
 import { STARTER_MAIN_SHADER, STARTER_BUFFER_SHADER } from './lib/shaders'
-import { playMode } from './lib/feedback-audio'
 import { INPUT_DRIVER_TYPES, SlotType } from './inputs/registry'
+import { exportVideoFrames } from './lib/videoExport'
 
 const DEFAULT_SLOT_TYPES: Record<string, SlotType> = {
   bufferA: 'shader', bufferB: 'shader', bufferC: 'shader', bufferD: 'shader'
@@ -16,18 +19,20 @@ const DEFAULT_SLOT_TYPES: Record<string, SlotType> = {
 const AUTOSAVE_DELAY_MS = 500
 
 function readStoredProjectSettings(): ProjectSettings {
-  try {
-    const value = JSON.parse(localStorage.getItem('projectSettings') ?? 'null') as Partial<ProjectSettings> | null
-    return normalizeProjectSettings(value)
-  } catch {
-    return DEFAULT_PROJECT_SETTINGS
-  }
+  return DEFAULT_PROJECT_SETTINGS
 }
 
 function normalizeProjectSettings(value: Partial<ProjectSettings> | null | undefined): ProjectSettings {
-  return value?.mouseTracking === 'hover'
-    ? { mouseTracking: 'hover' }
-    : DEFAULT_PROJECT_SETTINGS
+  return {
+    mouseTracking: value?.mouseTracking === 'hover' ? 'hover' : DEFAULT_PROJECT_SETTINGS.mouseTracking,
+    resolutionScale: isResolutionScale(value?.resolutionScale)
+      ? value.resolutionScale
+      : DEFAULT_PROJECT_SETTINGS.resolutionScale,
+  }
+}
+
+function isResolutionScale(value: string | undefined): value is ResolutionScale {
+  return value === 'auto' || value === '0.5' || value === '1' || value === '2'
 }
 
 function isSlotType(value: string | undefined): value is SlotType {
@@ -39,7 +44,9 @@ export function App() {
   const [slotTypes, setSlotTypes]           = useState<Record<string, SlotType>>(DEFAULT_SLOT_TYPES)
   const [projectSettings, setProjectSettings] = useState<ProjectSettings>(readStoredProjectSettings)
   const [isPreview, setIsPreview]           = useState(false)
-  const [previewErrors, setPreviewErrors]   = useState<string[]>([])
+  const [showStats, setShowStats]           = useState(false)
+  const [compileError, setCompileError]     = useState<string | null>(null)
+  const [exportStatus, setExportStatus]     = useState<string | null>(null)
   const [currentProjectPath, setCurrentProjectPath] = useState<string | null>(null)
   const [autosaveRevision, setAutosaveRevision] = useState(0)
 
@@ -47,14 +54,19 @@ export function App() {
   const projectSettingsRef = useRef(projectSettings)
   const isPreviewRef = useRef(isPreview)
   const autosavePausedRef = useRef(false)
+  const previewEditorStateRef = useRef<Monaco.editor.ICodeEditorViewState | null>(null)
   const rootRef = useRef<HTMLElement>(null)
   const resizeSizeRef = useRef<HTMLDivElement>(null)
+  const resizeEndFrameRef = useRef<number | null>(null)
+  const exportClearTimerRef = useRef<number | null>(null)
+  const exportInProgressRef = useRef(false)
   useEffect(() => { slotTypesRef.current = slotTypes }, [slotTypes])
   useEffect(() => { projectSettingsRef.current = projectSettings }, [projectSettings])
   useEffect(() => { isPreviewRef.current = isPreview }, [isPreview])
 
   const markProjectChanged = useCallback(() => {
     if (autosavePausedRef.current) return
+    setCompileError(null)
     setAutosaveRevision(value => value + 1)
   }, [])
 
@@ -66,19 +78,33 @@ export function App() {
   }, [projectSettings, webgl])
 
   function startPreview() {
-    const errors = webgl.start(monaco.modelsRef.current, slotTypesRef.current, projectSettingsRef.current)
-    if (errors.length > 0) { setPreviewErrors(errors); return }
-    setPreviewErrors([])
+    const result = webgl.start(monaco.modelsRef.current, slotTypesRef.current, projectSettingsRef.current)
+    const firstDiagnostic = result.diagnostics[0]
+    monaco.setDiagnostics(firstDiagnostic ? [firstDiagnostic] : [])
+    if (result.messages.length > 0) {
+      setCompileError(firstDiagnostic?.message ?? result.messages[0])
+      if (firstDiagnostic) switchToTab(firstDiagnostic.passIndex, { silent: true })
+      return
+    }
+    setCompileError(null)
+    previewEditorStateRef.current = monaco.saveViewState()
     setIsPreview(true)
   }
 
   function backToEditor() {
+    const wasPreview = isPreviewRef.current
     webgl.stop()
+    if (!wasPreview) return
+    setShowStats(false)
     setIsPreview(false)
+    window.requestAnimationFrame(() => {
+      monaco.layout()
+      monaco.restoreViewState(previewEditorStateRef.current)
+      monaco.focus()
+    })
   }
 
-  const switchToTab = useCallback((index: number) => {
-    if (index !== activeTabIndex) playMode()
+  const switchToTab = useCallback((index: number, _options?: { silent?: boolean }) => {
     setActiveTabIndex(index)
     if (index !== PROJECT_TAB) {
       const pass = PASS_DEFS[index]
@@ -99,9 +125,11 @@ export function App() {
   }, [markProjectChanged])
 
   const setProjectSettingValues = useCallback((settings: ProjectSettings) => {
-    if (projectSettingsRef.current.mouseTracking === settings.mouseTracking) return
+    if (
+      projectSettingsRef.current.mouseTracking === settings.mouseTracking &&
+      projectSettingsRef.current.resolutionScale === settings.resolutionScale
+    ) return
     setProjectSettings(settings)
-    localStorage.setItem('projectSettings', JSON.stringify(settings))
     markProjectChanged()
   }, [markProjectChanged])
 
@@ -148,10 +176,64 @@ export function App() {
     if (!result.canceled && result.projectPath) setCurrentProjectPath(result.projectPath)
   }, [buildPayload])
 
-  const loadProject = useCallback(async () => {
-    const result = await window.projectApi.load()
-    if (!result) return
+  const ensureProjectSaved = useCallback(async (): Promise<string | null> => {
+    const payload = buildPayload()
+    if (currentProjectPath) {
+      await window.projectApi.saveTo(currentProjectPath, payload)
+      return currentProjectPath
+    }
 
+    const result = await window.projectApi.saveAs(payload)
+    if (result.canceled || !result.projectPath) return null
+    setCurrentProjectPath(result.projectPath)
+    return result.projectPath
+  }, [buildPayload, currentProjectPath])
+
+  const exportVideo = useCallback(async () => {
+    if (exportInProgressRef.current) return
+    exportInProgressRef.current = true
+    if (exportClearTimerRef.current !== null) {
+      window.clearTimeout(exportClearTimerRef.current)
+      exportClearTimerRef.current = null
+    }
+
+    let exportId: string | null = null
+    try {
+      const projectPath = await ensureProjectSaved()
+      if (!projectPath) return
+
+      const payload = buildPayload()
+      setCompileError(null)
+      setExportStatus('exporting video 0%')
+      const started = await window.projectApi.startVideoExport(projectPath)
+      exportId = started.exportId
+
+      await exportVideoFrames({
+        payload,
+        slotTypes: slotTypesRef.current,
+        writeFrame: frame => window.projectApi.writeVideoExportFrame(started.exportId, frame),
+        onProgress: (frame, total) => {
+          setExportStatus(`exporting video ${Math.round((frame / total) * 100)}%`)
+        },
+      })
+
+      const finished = await window.projectApi.finishVideoExport(started.exportId)
+      exportId = null
+      setExportStatus(`exported ${finished.outputPath}`)
+      exportClearTimerRef.current = window.setTimeout(() => {
+        exportClearTimerRef.current = null
+        setExportStatus(null)
+      }, 4000)
+    } catch (err) {
+      if (exportId) await window.projectApi.cancelVideoExport(exportId).catch(() => {})
+      setExportStatus(null)
+      setCompileError((err as Error).message)
+    } finally {
+      exportInProgressRef.current = false
+    }
+  }, [buildPayload, ensureProjectSaved])
+
+  const applyLoadedProject = useCallback(async (result: LoadedProject) => {
     autosavePausedRef.current = true
     if (isPreview) backToEditor()
 
@@ -174,7 +256,6 @@ export function App() {
 
       const loadedSettings = normalizeProjectSettings(result.settings)
       setProjectSettings(loadedSettings)
-      localStorage.setItem('projectSettings', JSON.stringify(loadedSettings))
 
       await webgl.applyProjectChannels(result.channels)
 
@@ -186,6 +267,19 @@ export function App() {
       window.setTimeout(() => { autosavePausedRef.current = false }, 0)
     }
   }, [monaco, webgl, isPreview])
+
+  const loadProject = useCallback(async () => {
+    const result = await window.projectApi.load()
+    if (result) await applyLoadedProject(result)
+  }, [applyLoadedProject])
+
+  const loadRecentProject = useCallback(async (projectPath: string) => {
+    try {
+      await applyLoadedProject(await window.projectApi.loadRecent(projectPath))
+    } catch (err) {
+      console.error('Failed to open recent project', err)
+    }
+  }, [applyLoadedProject])
 
   const newProject = useCallback(() => {
     autosavePausedRef.current = true
@@ -201,7 +295,6 @@ export function App() {
       setSlotTypes(DEFAULT_SLOT_TYPES)
       localStorage.setItem('slotTypes', JSON.stringify(DEFAULT_SLOT_TYPES))
       setProjectSettings(DEFAULT_PROJECT_SETTINGS)
-      localStorage.setItem('projectSettings', JSON.stringify(DEFAULT_PROJECT_SETTINGS))
 
       PASS_DEFS.filter(d => d.isBuffer).forEach(def => {
         INPUT_DRIVER_TYPES.forEach(type => webgl.clearInput(type, def.id))
@@ -218,22 +311,41 @@ export function App() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (isFpsCounterShortcut(e)) {
+        if (!isPreviewRef.current) return
+        e.preventDefault()
+        e.stopPropagation()
+        e.stopImmediatePropagation()
+        setShowStats(value => !value)
+        return
+      }
       if (isRunShortcut(e))          { e.preventDefault(); startPreview(); return }
       if (isBackToEditorShortcut(e)) { e.preventDefault(); backToEditor(); return }
+      if (isPreviewRef.current && isPausePlaybackShortcut(e)) {
+        e.preventDefault()
+        webgl.togglePlaybackPaused()
+        return
+      }
+      if (isPreviewRef.current) return
       const i = getSwitchTabIndex(e)
       if (i !== -1)                  { e.preventDefault(); switchToTab(i) }
     }
-    document.addEventListener('keydown', handler)
-    return () => document.removeEventListener('keydown', handler)
-  }, [switchToTab])
+    window.addEventListener('keydown', handler, true)
+    return () => window.removeEventListener('keydown', handler, true)
+  }, [switchToTab, webgl])
 
   useEffect(() => {
     const unNew    = window.projectApi.onMenuNew(newProject)
     const unOpen   = window.projectApi.onMenuOpen(loadProject)
+    const unOpenRecent = window.projectApi.onMenuOpenRecent(loadRecentProject)
     const unSave   = window.projectApi.onMenuSave(saveProject)
     const unSaveAs = window.projectApi.onMenuSaveAs(saveProjectAs)
-    return () => { unNew(); unOpen(); unSave(); unSaveAs() }
-  }, [newProject, loadProject, saveProject, saveProjectAs])
+    const unExportVideo = window.projectApi.onMenuExportVideo(exportVideo)
+    const unToggleFps = window.projectApi.onMenuToggleFps(() => {
+      if (isPreviewRef.current) setShowStats(value => !value)
+    })
+    return () => { unNew(); unOpen(); unOpenRecent(); unSave(); unSaveAs(); unExportVideo(); unToggleFps() }
+  }, [newProject, loadProject, loadRecentProject, saveProject, saveProjectAs, exportVideo])
 
   useEffect(() => {
     const prevent = (e: DragEvent) => e.preventDefault()
@@ -252,16 +364,30 @@ export function App() {
   useEffect(() => {
     return window.appMeta.onResizeStateChange(state => {
       if (!state.active) {
-        rootRef.current?.classList.remove('is-resizing')
         monaco.layout()
+        if (resizeEndFrameRef.current !== null) window.cancelAnimationFrame(resizeEndFrameRef.current)
+        resizeEndFrameRef.current = window.requestAnimationFrame(() => {
+          resizeEndFrameRef.current = null
+          rootRef.current?.classList.remove('is-resizing')
+        })
         return
       }
 
-      if (isPreviewRef.current) return
+      if (resizeEndFrameRef.current !== null) {
+        window.cancelAnimationFrame(resizeEndFrameRef.current)
+        resizeEndFrameRef.current = null
+      }
       rootRef.current?.classList.add('is-resizing')
       if (resizeSizeRef.current) resizeSizeRef.current.textContent = `${state.width} x ${state.height}`
     })
   }, [monaco])
+
+  useEffect(() => {
+    return () => {
+      if (resizeEndFrameRef.current !== null) window.cancelAnimationFrame(resizeEndFrameRef.current)
+      if (exportClearTimerRef.current !== null) window.clearTimeout(exportClearTimerRef.current)
+    }
+  }, [])
 
   useEffect(() => {
     const setFullscreenClass = (fullscreen: boolean) => {
@@ -271,13 +397,6 @@ export function App() {
     window.appMeta.isFullscreen().then(setFullscreenClass)
     return window.appMeta.onFullscreenChange(setFullscreenClass)
   }, [])
-
-  useEffect(() => {
-    if (previewErrors.length === 0) return
-    const dismiss = () => setPreviewErrors([])
-    document.addEventListener('click', dismiss)
-    return () => document.removeEventListener('click', dismiss)
-  }, [previewErrors.length])
 
   return (
     <main ref={rootRef} className="root">
@@ -293,15 +412,24 @@ export function App() {
         onSetProjectSettings={setProjectSettingValues}
       />
 
+      {compileError && !isPreview && (
+        <div className="compile-error-panel" onClick={() => setCompileError(null)}>
+          {compileError}
+        </div>
+      )}
+
+      {exportStatus && (
+        <div className="export-status-panel">
+          {exportStatus}
+        </div>
+      )}
+
       <PreviewView
         canvasRef={webgl.canvasRef}
-        errors={previewErrors}
+        stats={webgl.stats}
+        showStats={showStats}
         hidden={!isPreview}
       />
-
-      {previewErrors.length > 0 && !isPreview && (
-        <pre className="error" onClick={() => setPreviewErrors([])}>{previewErrors.join('\n\n')}</pre>
-      )}
 
       <div className="resize-overlay" aria-hidden="true">
         <div ref={resizeSizeRef} className="resize-size">{window.innerWidth} x {window.innerHeight}</div>

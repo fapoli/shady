@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { createAudioInstance, AudioInstance } from '../lib/audio'
 
 type NamesState = Record<string, string | null>
+type ErrorsState = Record<string, string | null>
 
 export interface AudioInputRuntime {
   load(slotId: string, file: File): Promise<void>
@@ -12,6 +13,8 @@ export interface AudioInputRuntime {
   serializeProjectChannel(slotId: string): Partial<SaveChannelEntry>
   prepare(slotId: string): void
   update(slotId: string): void
+  pause(slotIds: readonly string[]): void
+  resume(slotIds: readonly string[]): void
   stop(slotIds: readonly string[]): void
   getTexture(slotId: string): WebGLTexture | null
 }
@@ -20,12 +23,17 @@ export function createAudioInputRuntime(
   getGl: () => WebGL2RenderingContext,
   getDroppedFilePath: (file: File) => string | null,
   setNames: Dispatch<SetStateAction<NamesState>>,
+  setErrors: Dispatch<SetStateAction<ErrorsState>>,
 ): AudioInputRuntime {
   const slotAudio: Record<string, AudioInstance> = {}
   const slotAudioTex: Record<string, WebGLTexture | null> = {}
 
   function setName(slotId: string, name: string | null): void {
     setNames(prev => ({ ...prev, [slotId]: name }))
+  }
+
+  function setError(slotId: string, error: string | null): void {
+    setErrors(prev => ({ ...prev, [slotId]: error }))
   }
 
   function ensureInstance(slotId: string): AudioInstance {
@@ -46,6 +54,7 @@ export function createAudioInputRuntime(
     else localStorage.removeItem(`audio_path_${slotId}`)
     localStorage.setItem(`audio_name_${slotId}`, file.name)
     setName(slotId, file.name)
+    setError(slotId, null)
   }
 
   function clearSlot(slotId: string, updateName = true): void {
@@ -55,7 +64,10 @@ export function createAudioInputRuntime(
     slotAudioTex[slotId] = null
     localStorage.removeItem(`audio_path_${slotId}`)
     localStorage.removeItem(`audio_name_${slotId}`)
-    if (updateName) setName(slotId, null)
+    if (updateName) {
+      setName(slotId, null)
+      setError(slotId, null)
+    }
   }
 
   function clear(slotId: string): void {
@@ -70,9 +82,11 @@ export function createAudioInputRuntime(
       await ensureInstance(slotId).restore(filePath)
       slotAudioTex[slotId] = ensureInstance(slotId).createTexture(getGl())
       setName(slotId, fileName)
+      setError(slotId, null)
     } catch {
       localStorage.removeItem(`audio_path_${slotId}`)
       localStorage.removeItem(`audio_name_${slotId}`)
+      setError(slotId, `missing audio: ${fileName ?? filePath.split('/').pop() ?? 'file'}`)
     }
   }
 
@@ -89,8 +103,10 @@ export function createAudioInputRuntime(
       localStorage.setItem(`audio_path_${slotId}`, channel.filePath)
       localStorage.setItem(`audio_name_${slotId}`, name)
       setName(slotId, name)
+      setError(slotId, null)
     } catch {
       setName(slotId, null)
+      setError(slotId, `missing audio: ${channel.fileName ?? channel.filePath.split('/').pop() ?? 'file'}`)
     }
   }
 
@@ -112,6 +128,14 @@ export function createAudioInputRuntime(
     if (inst && tex) inst.fillTexture(getGl(), tex)
   }
 
+  function pause(slotIds: readonly string[]): void {
+    slotIds.forEach(slotId => slotAudio[slotId]?.pause())
+  }
+
+  function resume(slotIds: readonly string[]): void {
+    slotIds.forEach(slotId => slotAudio[slotId]?.resume())
+  }
+
   function stop(slotIds: readonly string[]): void {
     slotIds.forEach(slotId => slotAudio[slotId]?.stop())
   }
@@ -129,6 +153,8 @@ export function createAudioInputRuntime(
     serializeProjectChannel,
     prepare,
     update,
+    pause,
+    resume,
     stop,
     getTexture,
   }

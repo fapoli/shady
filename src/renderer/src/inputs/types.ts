@@ -9,18 +9,22 @@ export interface InputEditorProps {
 }
 
 type NamesState = Record<string, string | null>
+type ErrorsState = Record<string, string | null>
 
 export interface InputRuntimeContext {
   getGl(): WebGL2RenderingContext
   getDroppedFilePath(file: File): string | null
   setAudioNames: Dispatch<SetStateAction<NamesState>>
   setImageNames: Dispatch<SetStateAction<NamesState>>
+  setResourceErrors: Dispatch<SetStateAction<ErrorsState>>
 }
 
 export interface InputRuntime {
   load?(slotId: string, file: File): Promise<void>
   prepare?(slotId: string): void
   update?(slotId: string): void
+  pause?(slotIds: readonly string[]): void
+  resume?(slotIds: readonly string[]): void
   stop?(slotIds: readonly string[]): void
   clear?(slotId: string): void
   restoreLocal?(slotId: string): Promise<void>
