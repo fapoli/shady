@@ -1,14 +1,12 @@
-import type { Dispatch, SetStateAction } from 'react'
+import type { LoadedChannel, SaveChannelEntry } from '../../../shared/types'
 import { createAudioInstance, AudioInstance } from '../lib/audio'
-
-type NamesState = Record<string, string | null>
-type ErrorsState = Record<string, string | null>
+import { createFileChannelStore } from './fileChannelStore'
+import type { InputRuntimeContext } from './types'
 
 export interface AudioInputRuntime {
-  load(slotId: string, file: File): Promise<void>
+  loadFile(slotId: string, file: File): Promise<void>
   clear(slotId: string): void
   clearSlot(slotId: string, updateName?: boolean): void
-  restoreLocal(slotId: string): Promise<void>
   applyProjectChannel(slotId: string, channel?: LoadedChannel): Promise<void>
   serializeProjectChannel(slotId: string): Partial<SaveChannelEntry>
   prepare(slotId: string): void
@@ -20,21 +18,11 @@ export interface AudioInputRuntime {
 }
 
 export function createAudioInputRuntime(
-  getGl: () => WebGL2RenderingContext,
-  getDroppedFilePath: (file: File) => string | null,
-  setNames: Dispatch<SetStateAction<NamesState>>,
-  setErrors: Dispatch<SetStateAction<ErrorsState>>,
+  { getGl, getDroppedFilePath, setSlotState }: InputRuntimeContext,
 ): AudioInputRuntime {
   const slotAudio: Record<string, AudioInstance> = {}
   const slotAudioTex: Record<string, WebGLTexture | null> = {}
-
-  function setName(slotId: string, name: string | null): void {
-    setNames(prev => ({ ...prev, [slotId]: name }))
-  }
-
-  function setError(slotId: string, error: string | null): void {
-    setErrors(prev => ({ ...prev, [slotId]: error }))
-  }
+  const files = createFileChannelStore('audio', setSlotState)
 
   function ensureInstance(slotId: string): AudioInstance {
     if (!slotAudio[slotId]) slotAudio[slotId] = createAudioInstance()
@@ -46,15 +34,11 @@ export function createAudioInputRuntime(
     return slotAudioTex[slotId]!
   }
 
-  async function load(slotId: string, file: File): Promise<void> {
+  async function loadFile(slotId: string, file: File): Promise<void> {
     const filePath = getDroppedFilePath(file)
     await ensureInstance(slotId).loadFile(file)
     ensureTexture(slotId)
-    if (filePath) localStorage.setItem(`audio_path_${slotId}`, filePath)
-    else localStorage.removeItem(`audio_path_${slotId}`)
-    localStorage.setItem(`audio_name_${slotId}`, file.name)
-    setName(slotId, file.name)
-    setError(slotId, null)
+    files.remember(slotId, filePath, file.name)
   }
 
   function clearSlot(slotId: string, updateName = true): void {
@@ -62,59 +46,31 @@ export function createAudioInputRuntime(
     const tex = slotAudioTex[slotId]
     if (tex) getGl().deleteTexture(tex)
     slotAudioTex[slotId] = null
-    localStorage.removeItem(`audio_path_${slotId}`)
-    localStorage.removeItem(`audio_name_${slotId}`)
-    if (updateName) {
-      setName(slotId, null)
-      setError(slotId, null)
-    }
+    files.clear(slotId, updateName)
   }
 
   function clear(slotId: string): void {
     clearSlot(slotId)
   }
 
-  async function restoreLocal(slotId: string): Promise<void> {
-    const filePath = localStorage.getItem(`audio_path_${slotId}`)
-    const fileName = localStorage.getItem(`audio_name_${slotId}`)
-    if (!filePath) return
-    try {
-      await ensureInstance(slotId).restore(filePath)
-      slotAudioTex[slotId] = ensureInstance(slotId).createTexture(getGl())
-      setName(slotId, fileName)
-      setError(slotId, null)
-    } catch {
-      localStorage.removeItem(`audio_path_${slotId}`)
-      localStorage.removeItem(`audio_name_${slotId}`)
-      setError(slotId, `missing audio: ${fileName ?? filePath.split('/').pop() ?? 'file'}`)
-    }
-  }
-
   async function applyProjectChannel(slotId: string, channel?: LoadedChannel): Promise<void> {
     clearSlot(slotId, false)
     if (channel?.type !== 'audio' || !channel.filePath) {
-      setName(slotId, null)
+      files.setName(slotId, null)
       return
     }
     try {
       await ensureInstance(slotId).restore(channel.filePath)
       slotAudioTex[slotId] = ensureInstance(slotId).createTexture(getGl())
-      const name = channel.fileName ?? channel.filePath.split('/').pop() ?? ''
-      localStorage.setItem(`audio_path_${slotId}`, channel.filePath)
-      localStorage.setItem(`audio_name_${slotId}`, name)
-      setName(slotId, name)
-      setError(slotId, null)
+      files.remember(slotId, channel.filePath, files.channelName(channel))
     } catch {
-      setName(slotId, null)
-      setError(slotId, `missing audio: ${channel.fileName ?? channel.filePath.split('/').pop() ?? 'file'}`)
+      files.setName(slotId, null)
+      files.setError(slotId, `missing audio: ${files.channelName(channel) || 'file'}`)
     }
   }
 
   function serializeProjectChannel(slotId: string): Partial<SaveChannelEntry> {
-    return {
-      filePath: localStorage.getItem(`audio_path_${slotId}`) ?? undefined,
-      fileName: localStorage.getItem(`audio_name_${slotId}`) ?? undefined,
-    }
+    return files.serialize(slotId)
   }
 
   function prepare(slotId: string): void {
@@ -145,10 +101,9 @@ export function createAudioInputRuntime(
   }
 
   return {
-    load,
+    loadFile,
     clear,
     clearSlot,
-    restoreLocal,
     applyProjectChannel,
     serializeProjectChannel,
     prepare,

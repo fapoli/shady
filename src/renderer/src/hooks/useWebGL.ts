@@ -1,65 +1,26 @@
 import { useRef, useCallback, useEffect, useState } from 'react'
 import type * as Monaco from 'monaco-editor'
-import { DEFAULT_PROJECT_SETTINGS, PASS_DEFS, BUFFER_IDS, ProjectSettings } from '../../../shared/types'
+import {
+  BUFFER_IDS,
+  DEFAULT_PROJECT_SETTINGS,
+  PASS_DEFS,
+  type LoadedChannel,
+  type ProjectSettings,
+  type SaveChannelEntry,
+} from '../../../shared/types'
 import {
   buildProgram, destroyProgram, createFboPair, destroyFboPair, swapFboPair,
-  bindUniforms, CompiledPass, FboPair
+  bindUniforms
 } from '../lib/webgl'
 import { getRuntimeInputTexture } from '../inputs/runtime'
-import { INPUT_DRIVERS, INPUT_DRIVER_TYPES, SlotType } from '../inputs/registry'
-import type { InputRuntime, InputRuntimeContext } from '../inputs/types'
-
-interface PassState {
-  compiled:  CompiledPass | null
-  fboPair:   FboPair | null
-}
-
-export interface CompileDiagnostic {
-  passIndex: number
-  line: number
-  message: string
-}
-
-interface CompileResult {
-  messages: string[]
-  diagnostics: CompileDiagnostic[]
-}
-
-export interface RenderStats {
-  fps: number
-  frameMs: number
-  width: number
-  height: number
-  dpr: number
-  scale: number
-}
+import { getInputModule, INPUT_MODULE_TYPES, SlotType } from '../inputs/registry'
+import type { InputRuntime, InputRuntimeContext, InputSlotState } from '../inputs/types'
+import { parseCompileDiagnostics } from './webglDiagnostics'
+import type { CompileDiagnostic, CompileResult, PassState, RenderStats, WebGLHandle } from './webglTypes'
 
 const RESIZE_SETTLE_MS = 90
 const RENDER_RESUME_MS = 120
 const STATS_SAMPLE_MS = 1000
-const GLSL_INFO_LOG_LINE_RE = /ERROR:\s*\d+:(\d+):\s*(.*)/g
-
-export interface WebGLHandle {
-  canvasRef: React.RefObject<HTMLCanvasElement | null>
-  stats: RenderStats
-  audioNames: Record<string, string | null>
-  imageNames: Record<string, string | null>
-  resourceErrors: Record<string, string | null>
-  start(
-    models: (Monaco.editor.ITextModel | null)[],
-    slotTypes: Record<string, SlotType>,
-    projectSettings: ProjectSettings,
-  ): CompileResult
-  setProjectSettings(settings: ProjectSettings): void
-  togglePlaybackPaused(): boolean
-  stop(): void
-  cleanup(): void
-  loadInput(type: SlotType, slotId: string, file: File): Promise<void>
-  clearInput(type: SlotType, slotId: string): void
-  serializeInput(type: SlotType, slotId: string): SaveChannelEntry
-  restoreSlots(slotTypes: Record<string, SlotType>): Promise<void>
-  applyProjectChannels(channels: Record<string, LoadedChannel>): Promise<void>
-}
 
 export function useWebGL(onProjectChange?: () => void): WebGLHandle {
   const canvasRef  = useRef<HTMLCanvasElement>(null)
@@ -67,9 +28,7 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
   const rafRef     = useRef<number | null>(null)
   const passesRef  = useRef<PassState[]>(PASS_DEFS.map(() => ({ compiled: null, fboPair: null })))
 
-  const [audioNames, setAudioNames] = useState<Record<string, string | null>>({})
-  const [imageNames, setImageNames] = useState<Record<string, string | null>>({})
-  const [resourceErrors, setResourceErrors] = useState<Record<string, string | null>>({})
+  const [inputStates, setInputStates] = useState<Record<string, InputSlotState>>({})
   const [stats, setStats] = useState<RenderStats>({ fps: 0, frameMs: 0, width: 0, height: 0, dpr: 1, scale: 1 })
   const inputRuntimes = useRef<Partial<Record<SlotType, InputRuntime>>>({})
   const projectSettingsRef = useRef<ProjectSettings>(DEFAULT_PROJECT_SETTINGS)
@@ -125,6 +84,10 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
     return filePath && filePath !== 'undefined' ? filePath : null
   }
 
+  const setSlotState = useCallback((slotId: string, patch: Partial<InputSlotState>) => {
+    setInputStates(prev => ({ ...prev, [slotId]: { ...prev[slotId], ...patch } }))
+  }, [])
+
   function getGl(): WebGL2RenderingContext {
     if (!glRef.current) {
       const canvas = canvasRef.current!
@@ -161,14 +124,12 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
   function getInputRuntime(type: SlotType): InputRuntime | null {
     if (type === 'shader') return null
     if (!inputRuntimes.current[type]) {
-      const createRuntime = INPUT_DRIVERS[type]?.createRuntime
+      const createRuntime = getInputModule(type)?.createRuntime
       if (!createRuntime) return null
       const context: InputRuntimeContext = {
         getGl,
         getDroppedFilePath,
-        setAudioNames,
-        setImageNames,
-        setResourceErrors,
+        setSlotState,
       }
       inputRuntimes.current[type] = createRuntime(context)
     }
@@ -177,32 +138,6 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
 
   function getShaderTexture(slotId: string): WebGLTexture | null {
     return passesRef.current[PASS_DEFS.findIndex(d => d.id === slotId)]?.fboPair?.texRead ?? null
-  }
-
-  function toSourceLine(logLine: number, source: string): number {
-    const versionLine = source.split('\n').findIndex(line => line.trimStart().startsWith('#version')) + 1
-    const injectedDefineLine = versionLine > 0
-    const sourceLine = injectedDefineLine && logLine > versionLine ? logLine - 1 : logLine
-    return Math.max(1, Math.min(sourceLine, source.split('\n').length))
-  }
-
-  function parseCompileDiagnostics(passIndex: number, source: string, message: string): CompileDiagnostic[] {
-    const diagnostics: CompileDiagnostic[] = []
-    GLSL_INFO_LOG_LINE_RE.lastIndex = 0
-
-    for (const match of message.matchAll(GLSL_INFO_LOG_LINE_RE)) {
-      const logLine = Number(match[1])
-      const detail = match[2]?.trim() || message
-      diagnostics.push({
-        passIndex,
-        line: Number.isFinite(logLine) ? toSourceLine(logLine, source) : 1,
-        message: detail,
-      })
-    }
-
-    return diagnostics.length > 0
-      ? diagnostics
-      : [{ passIndex, line: 1, message }]
   }
 
   useEffect(() => {
@@ -457,8 +392,13 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
     })
   }, [stop])
 
+  const activateInput = useCallback(async (type: SlotType, slotId: string) => {
+    await getInputRuntime(type)?.activate?.(slotId)
+    onProjectChange?.()
+  }, [onProjectChange])
+
   const loadInput = useCallback(async (type: SlotType, slotId: string, file: File) => {
-    await getInputRuntime(type)?.load?.(slotId, file)
+    await getInputRuntime(type)?.loadFile?.(slotId, file)
     onProjectChange?.()
   }, [onProjectChange])
 
@@ -474,19 +414,11 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
     }
   }, [])
 
-  const restoreSlots = useCallback(async (slotTypes: Record<string, SlotType>) => {
-    for (const def of PASS_DEFS.filter(d => d.isBuffer)) {
-      const slotId = def.id
-      const type   = slotTypes[slotId]
-      await getInputRuntime(type)?.restoreLocal?.(slotId)
-    }
-  }, [])
-
   const applyProjectChannels = useCallback(async (channels: Record<string, LoadedChannel>) => {
     for (const def of PASS_DEFS.filter(d => d.isBuffer)) {
       const slotId = def.id
       const ch = channels[slotId]
-      for (const type of INPUT_DRIVER_TYPES) {
+      for (const type of INPUT_MODULE_TYPES) {
         await getInputRuntime(type)?.applyProjectChannel?.(slotId, ch)
       }
     }
@@ -495,17 +427,15 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
   return {
     canvasRef,
     stats,
-    audioNames,
-    imageNames,
-    resourceErrors,
+    inputStates,
     start,
     stop,
     cleanup,
     togglePlaybackPaused,
+    activateInput,
     loadInput,
     clearInput,
     serializeInput,
-    restoreSlots,
     applyProjectChannels,
     setProjectSettings: applyProjectSettings,
   }

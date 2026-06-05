@@ -1,5 +1,5 @@
 import { DEFAULT_PROJECT_SETTINGS, PASS_DEFS, ProjectSettings } from '../../../shared/types'
-import { INPUT_DRIVERS, INPUT_DRIVER_TYPES, SlotType } from '../inputs/registry'
+import { INPUT_MODULES, INPUT_MODULE_TYPES, SlotType } from '../inputs/registry'
 
 interface Props {
   slotTypes:       Record<string, SlotType>
@@ -21,14 +21,14 @@ export function ProjectPanel({ slotTypes, projectSettings, onSetSlotType, onSetP
               <div key={pass.id} className="project-row">
                 <span className="project-label">channel {i}</span>
                 <div className="project-options">
-                  {INPUT_DRIVER_TYPES.map(type => (
+                  {INPUT_MODULE_TYPES.map(type => (
                     <button
                       key={type}
                       className={'option-btn' + (slotTypes[pass.id] === type ? ' active' : '')}
                       tabIndex={-1}
                       onClick={() => onSetSlotType(pass.id, type)}
                     >
-                      {INPUT_DRIVERS[type].label}
+                      {INPUT_MODULES[type].label}
                     </button>
                   ))}
                 </div>

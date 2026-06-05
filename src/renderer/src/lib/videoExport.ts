@@ -1,4 +1,4 @@
-import { BUFFER_IDS, PASS_DEFS } from '../../../shared/types'
+import { BUFFER_IDS, PASS_DEFS, type SavePayload } from '../../../shared/types'
 import type { SlotType } from '../inputs/registry'
 import {
   bindUniforms,

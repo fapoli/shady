@@ -2,31 +2,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import { spawn, ChildProcessWithoutNullStreams } from 'node:child_process'
 import { app, BrowserWindow, ipcMain, dialog, Menu, systemPreferences, shell } from 'electron'
-
-interface SaveChannelEntry {
-  type: string
-  filePath?: string
-  fileName?: string
-}
-
-interface SavePayload {
-  shaders: Record<string, string>
-  channels: Record<string, SaveChannelEntry>
-  settings?: {
-    mouseTracking?: 'drag' | 'hover'
-    resolutionScale?: 'auto' | '0.5' | '1' | '2'
-  }
-}
-
-interface LoadedProject {
-  shaders: Record<string, string>
-  channels: Record<string, { type: string; filePath?: string; fileName?: string }>
-  settings?: {
-    mouseTracking?: 'drag' | 'hover'
-    resolutionScale?: 'auto' | '0.5' | '1' | '2'
-  }
-  projectPath: string
-}
+import type { LoadedChannel, LoadedProject, ProjectSettings, SaveChannelEntry, SavePayload } from '../shared/types'
 
 const RECENT_PROJECTS_FILE = 'recent-projects.json'
 const MAX_RECENT_PROJECTS = 10
@@ -124,11 +100,8 @@ function clearRecentProjects(win: BrowserWindow): void {
 async function readProject(folder: string): Promise<LoadedProject> {
   let config: {
     version: number
-    channels: Record<string, { type: string; filePath?: string }>
-    settings?: {
-      mouseTracking?: 'drag' | 'hover'
-      resolutionScale?: 'auto' | '0.5' | '1' | '2'
-    }
+    channels: Record<string, Pick<LoadedChannel, 'type' | 'filePath'>>
+    settings?: Partial<ProjectSettings>
   }
   try {
     config = JSON.parse(await fs.promises.readFile(path.join(folder, 'project.json'), 'utf-8'))
@@ -143,7 +116,7 @@ async function readProject(folder: string): Promise<LoadedProject> {
     } catch { /* missing shader file - leave undefined */ }
   }
 
-  const channels: Record<string, { type: string; filePath?: string; fileName?: string }> = {}
+  const channels: Record<string, LoadedChannel> = {}
   for (const [slotId, ch] of Object.entries(config.channels)) {
     if ((ch.type === 'audio' || ch.type === 'image') && ch.filePath) {
       const filePath = fromProjectRelativePath(folder, ch.filePath)

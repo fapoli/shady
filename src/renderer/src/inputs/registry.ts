@@ -1,4 +1,4 @@
-import type { InputDriver } from './types'
+import type { InputModule, SlotType } from './types'
 import { ShaderInput } from './ShaderInput'
 import { AudioInput } from './AudioInput'
 import { ImageInput } from './ImageInput'
@@ -7,32 +7,52 @@ import { createAudioInputRuntime } from './audioRuntime'
 import { createImageInputRuntime } from './imageRuntime'
 import { createMicrophoneInputRuntime } from './microphoneRuntime'
 
-export const INPUT_DRIVERS = {
-  shader: {
-    type: 'shader',
-    label: 'shader',
-    Editor: ShaderInput,
-  },
-  audio: {
-    type: 'audio',
-    label: 'audio',
-    Editor: AudioInput,
-    createRuntime: ctx => createAudioInputRuntime(ctx.getGl, ctx.getDroppedFilePath, ctx.setAudioNames, ctx.setResourceErrors),
-  },
-  image: {
-    type: 'image',
-    label: 'image',
-    Editor: ImageInput,
-    createRuntime: ctx => createImageInputRuntime(ctx.getGl, ctx.getDroppedFilePath, ctx.setImageNames, ctx.setResourceErrors),
-  },
-  microphone: {
-    type: 'microphone',
-    label: 'microphone',
-    Editor: MicrophoneInput,
-    createRuntime: ctx => createMicrophoneInputRuntime(ctx.getGl),
-  },
-} as const satisfies Record<string, InputDriver>
+const inputModules = new Map<SlotType, InputModule>()
+export const INPUT_MODULES: Record<string, InputModule> = {}
+export const INPUT_MODULE_TYPES: SlotType[] = []
 
-export type SlotType = keyof typeof INPUT_DRIVERS
+export function registerInputModule(module: InputModule): void {
+  if (inputModules.has(module.type)) {
+    throw new Error(`Input module already registered: ${module.type}`)
+  }
+  inputModules.set(module.type, module)
+  INPUT_MODULES[module.type] = module
+  INPUT_MODULE_TYPES.push(module.type)
+}
 
-export const INPUT_DRIVER_TYPES = Object.keys(INPUT_DRIVERS) as SlotType[]
+export function getInputModule(type: SlotType): InputModule | undefined {
+  return inputModules.get(type)
+}
+
+export function getInputModules(): InputModule[] {
+  return [...inputModules.values()]
+}
+
+registerInputModule({
+  type: 'shader',
+  label: 'shader',
+  Editor: ShaderInput,
+})
+
+registerInputModule({
+  type: 'image',
+  label: 'image',
+  Editor: ImageInput,
+  createRuntime: ctx => createImageInputRuntime(ctx),
+})
+
+registerInputModule({
+  type: 'audio',
+  label: 'audio',
+  Editor: AudioInput,
+  createRuntime: ctx => createAudioInputRuntime(ctx),
+})
+
+registerInputModule({
+  type: 'microphone',
+  label: 'microphone',
+  Editor: MicrophoneInput,
+  createRuntime: ctx => createMicrophoneInputRuntime(ctx),
+})
+
+export { type SlotType }

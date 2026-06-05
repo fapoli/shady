@@ -1,6 +1,9 @@
+import type { InputRuntimeContext } from './types'
+
 const ANALYSER_SIZE = 512
 
 export interface MicrophoneInputRuntime {
+  activate(slotId: string): Promise<void>
   prepare(slotId: string): void
   update(slotId: string): void
   stop(slotIds: readonly string[]): void
@@ -19,7 +22,7 @@ interface MicrophoneSlot {
 }
 
 export function createMicrophoneInputRuntime(
-  getGl: () => WebGL2RenderingContext,
+  { getGl, setSlotState }: InputRuntimeContext,
 ): MicrophoneInputRuntime {
   const slots: Record<string, MicrophoneSlot | null> = {}
   const pending: Record<string, Promise<void> | null> = {}
@@ -83,6 +86,17 @@ export function createMicrophoneInputRuntime(
       freqData: new Uint8Array(ANALYSER_SIZE),
       waveData: new Uint8Array(ANALYSER_SIZE),
     }
+    setSlotState(slotId, { active: true, error: null })
+  }
+
+  async function activate(slotId: string): Promise<void> {
+    cancelled[slotId] = false
+    try {
+      await start(slotId)
+    } catch (err) {
+      setSlotState(slotId, { active: false, error: (err as Error).message })
+      throw err
+    }
   }
 
   function prepare(slotId: string): void {
@@ -92,6 +106,7 @@ export function createMicrophoneInputRuntime(
     pending[slotId] = start(slotId)
       .catch(err => {
         console.error('Failed to start microphone input:', err)
+        setSlotState(slotId, { active: false, error: (err as Error).message })
       })
       .finally(() => {
         pending[slotId] = null
@@ -123,6 +138,7 @@ export function createMicrophoneInputRuntime(
 
     getGl().deleteTexture(slot.texture)
     slots[slotId] = null
+    setSlotState(slotId, { active: false })
   }
 
   function stop(slotIds: readonly string[]): void {
@@ -133,5 +149,5 @@ export function createMicrophoneInputRuntime(
     return slots[slotId]?.texture ?? null
   }
 
-  return { prepare, update, stop, clear, getTexture }
+  return { activate, prepare, update, stop, clear, getTexture }
 }

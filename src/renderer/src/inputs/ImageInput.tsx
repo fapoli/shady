@@ -9,14 +9,15 @@ function isImageFile(file: File): boolean {
 }
 
 export function ImageInput({ slotId, webgl }: InputEditorProps) {
-  const imageName = webgl.imageNames[slotId] ?? null
+  const state = webgl.inputStates[slotId]
+  const imageName = state?.label ?? null
 
   return (
     <ResourceDropZone
       label={imageName ?? ''}
       emptyLabel="select image"
       accept="image/png,image/jpeg,image/gif,image/webp"
-      externalError={webgl.resourceErrors[slotId]}
+      externalError={state?.error}
       validateFile={file => isImageFile(file) ? null : 'unsupported image file'}
       onDrop={file => webgl.loadInput('image', slotId, file)}
       onRemove={imageName ? () => webgl.clearInput('image', slotId) : undefined}

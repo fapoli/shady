@@ -4,8 +4,8 @@ import { TabBar } from './TabBar'
 import { ProjectPanel } from './ProjectPanel'
 import { FindWidget } from './FindWidget'
 import { MonacoHandle } from '../hooks/useMonaco'
-import { WebGLHandle } from '../hooks/useWebGL'
-import { INPUT_DRIVERS, SlotType } from '../inputs/registry'
+import { WebGLHandle } from '../hooks/webglTypes'
+import { INPUT_MODULES, SlotType } from '../inputs/registry'
 
 interface Props {
   monaco:         MonacoHandle
@@ -38,8 +38,8 @@ export function EditorView({
   const showEditor = activeTabIndex !== PROJECT_TAB && activeInputType === 'shader'
   const showResource = activeTabIndex !== PROJECT_TAB && activePass?.isBuffer && activeInputType !== 'shader'
   const showProject = activeTabIndex === PROJECT_TAB
-  const ShaderEditor = INPUT_DRIVERS.shader.Editor
-  const ResourceEditor = activeInputType ? INPUT_DRIVERS[activeInputType]?.Editor : null
+  const ShaderEditor = INPUT_MODULES.shader.Editor
+  const ResourceEditor = activeInputType ? INPUT_MODULES[activeInputType]?.Editor : null
 
   return (
     <section className={'view view-editor' + (hidden ? ' hidden' : '')}>

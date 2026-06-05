@@ -3,7 +3,7 @@ import type * as Monaco from 'monaco-editor'
 import { registerGlslLanguage, defineTokyoNightTheme } from '../lib/glsl-language'
 import { PASS_DEFS } from '../../../shared/types'
 import { STARTER_MAIN_SHADER, STARTER_BUFFER_SHADER } from '../lib/shaders'
-import type { CompileDiagnostic } from './useWebGL'
+import type { CompileDiagnostic } from './webglTypes'
 
 type MonacoApi = typeof import('monaco-editor')
 

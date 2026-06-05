@@ -9,14 +9,15 @@ function isAudioFile(file: File): boolean {
 }
 
 export function AudioInput({ slotId, webgl }: InputEditorProps) {
-  const audioName = webgl.audioNames[slotId] ?? null
+  const state = webgl.inputStates[slotId]
+  const audioName = state?.label ?? null
 
   return (
     <ResourceDropZone
       label={audioName ?? ''}
       emptyLabel="select audio file"
       accept="audio/*,.mp3,.wav,.ogg,.m4a,.aac,.flac,.opus,.webm"
-      externalError={webgl.resourceErrors[slotId]}
+      externalError={state?.error}
       validateFile={file => isAudioFile(file) ? null : 'unsupported audio file'}
       onDrop={file => webgl.loadInput('audio', slotId, file)}
       onRemove={audioName ? () => webgl.clearInput('audio', slotId) : undefined}

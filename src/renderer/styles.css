@@ -85,6 +85,25 @@ body {
   box-shadow: none !important;
 }
 
+#editor .monaco-editor .margin,
+#editor .monaco-editor .margin-view-overlays,
+#editor .monaco-editor .line-numbers,
+#editor .monaco-editor .glyph-margin,
+#editor .monaco-editor .overlayWidgets,
+#editor .monaco-editor .minimap,
+#editor .monaco-editor .scrollbar,
+#editor .monaco-editor .zones {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#editor .monaco-editor .view-lines,
+#editor .monaco-editor .view-line,
+#editor .monaco-editor .view-line span {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 .shady-find-widget {
   position: fixed;
   left: 0;
@@ -106,6 +125,8 @@ body {
   color: var(--accent);
   font-size: 13px;
   line-height: var(--bottom-bar-height);
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .shady-find-input {
@@ -121,6 +142,8 @@ body {
   border-radius: 0;
   caret-color: var(--accent);
   outline: none;
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 .shady-find-count {
@@ -131,6 +154,8 @@ body {
   font-size: 11px;
   text-align: right;
   white-space: nowrap;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .shady-find-btn {
@@ -146,6 +171,8 @@ body {
   border-radius: 0;
   cursor: pointer;
   text-transform: lowercase;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .shady-find-btn:hover,
@@ -239,6 +266,8 @@ body {
   font-size: 13px;
   padding: 0 0 0 28px;
   text-transform: lowercase;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* ---- Resource panel (audio / image drop zone shown inside a buffer tab) ---- */
@@ -255,6 +284,8 @@ body {
   justify-content: center;
   gap: 8px;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .resource-drop-label {
@@ -295,6 +326,8 @@ body {
   right: 0;
   bottom: var(--bottom-bar-height);
   padding: 0 0 0 28px;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .project-content {
@@ -396,6 +429,8 @@ body {
   transform: translateZ(0);
   z-index: 30;
   -webkit-app-region: no-drag;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 .tabs {

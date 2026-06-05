@@ -1,4 +1,4 @@
-import type { RenderStats } from '../hooks/useWebGL'
+import type { RenderStats } from '../hooks/webglTypes'
 
 interface Props {
   canvasRef: React.RefObject<HTMLCanvasElement | null>
