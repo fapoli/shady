@@ -1,3 +1,5 @@
+import { registerTextureSize, type ChannelAudioInfo } from './webgl'
+
 const ANALYSER_SIZE = 512
 
 export interface AudioInstance {
@@ -10,6 +12,7 @@ export interface AudioInstance {
   unload(): void
   fillTexture(gl: WebGL2RenderingContext, tex: WebGLTexture): void
   createTexture(gl: WebGL2RenderingContext): WebGLTexture
+  getInfo(): ChannelAudioInfo | null
 }
 
 export function createAudioInstance(): AudioInstance {
@@ -17,6 +20,7 @@ export function createAudioInstance(): AudioInstance {
   let analyser: AnalyserNode | null = null
   let audioSource: AudioBufferSourceNode | null = null
   let audioBuffer: AudioBuffer | null = null
+  let startedAt = 0
   const freqData = new Uint8Array(ANALYSER_SIZE)
   const waveData = new Uint8Array(ANALYSER_SIZE)
 
@@ -44,6 +48,7 @@ export function createAudioInstance(): AudioInstance {
     audioSource.loop   = true
     audioSource.connect(analyser!)
     audioSource.start()
+    startedAt = audioContext!.currentTime
     void audioContext!.resume()
   }
 
@@ -92,8 +97,17 @@ export function createAudioInstance(): AudioInstance {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
     gl.bindTexture(gl.TEXTURE_2D, null)
+    registerTextureSize(tex, ANALYSER_SIZE, 2)
     return tex
   }
 
-  return { loadFile, play, pause, resume, stop, restore, unload, fillTexture, createTexture }
+  function getInfo(): ChannelAudioInfo | null {
+    if (!audioContext || !audioBuffer || !audioSource) return null
+    return {
+      time: (audioContext.currentTime - startedAt) % audioBuffer.duration,
+      sampleRate: audioContext.sampleRate,
+    }
+  }
+
+  return { loadFile, play, pause, resume, stop, restore, unload, fillTexture, createTexture, getInfo }
 }

@@ -88,7 +88,7 @@ export async function exportVideoFrames({ payload, slotTypes, writeFrame, onProg
         gl.useProgram(state.compiled.program)
         gl.bindVertexArray(state.compiled.vao)
         bindUniforms(gl, state.compiled.program, elapsed, timeDelta, frame, EXPORT_WIDTH, EXPORT_HEIGHT,
-          mouseState, slotTypes, BUFFER_IDS, (slotId, type) => getExportTexture(slotId, type, passStates, imageTextures))
+          mouseState, slotTypes, BUFFER_IDS, (slotId, type) => getExportTexture(slotId, type, passStates, imageTextures), () => null)
         gl.drawArrays(gl.TRIANGLES, 0, 6)
         gl.bindVertexArray(null)
         swapFboPair(state.fboPair)
@@ -103,7 +103,7 @@ export async function exportVideoFrames({ payload, slotTypes, writeFrame, onProg
         gl.useProgram(main.compiled.program)
         gl.bindVertexArray(main.compiled.vao)
         bindUniforms(gl, main.compiled.program, elapsed, timeDelta, frame, EXPORT_WIDTH, EXPORT_HEIGHT,
-          mouseState, slotTypes, BUFFER_IDS, (slotId, type) => getExportTexture(slotId, type, passStates, imageTextures))
+          mouseState, slotTypes, BUFFER_IDS, (slotId, type) => getExportTexture(slotId, type, passStates, imageTextures), () => null)
         gl.drawArrays(gl.TRIANGLES, 0, 6)
         gl.bindVertexArray(null)
       }

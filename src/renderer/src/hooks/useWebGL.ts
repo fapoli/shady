@@ -12,7 +12,7 @@ import {
   buildProgram, destroyProgram, createFboPair, destroyFboPair, swapFboPair,
   bindUniforms
 } from '../lib/webgl'
-import { getRuntimeInputTexture } from '../inputs/runtime'
+import { getRuntimeAudioInfo, getRuntimeInputTexture } from '../inputs/runtime'
 import { getInputModule, INPUT_MODULE_TYPES, SlotType } from '../inputs/registry'
 import type { InputRuntime, InputRuntimeContext, InputSlotState } from '../inputs/types'
 import { parseCompileDiagnostics } from './webglDiagnostics'
@@ -304,6 +304,7 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
         bindUniforms(gl, state.compiled.program, elapsed, timeDelta, frameCount.current, w, h,
           mouseState.current, slotTypes, BUFFER_IDS,
           (id, type) => getRuntimeInputTexture(type, id, getShaderTexture, getInputRuntime),
+          (id, type) => getRuntimeAudioInfo(type, id, getInputRuntime),
         )
         gl.drawArrays(gl.TRIANGLES, 0, 6)
         gl.bindVertexArray(null)
@@ -320,6 +321,7 @@ export function useWebGL(onProjectChange?: () => void): WebGLHandle {
         bindUniforms(gl, imgState.compiled.program, elapsed, timeDelta, frameCount.current, w, h,
           mouseState.current, slotTypes, BUFFER_IDS,
           (id, type) => getRuntimeInputTexture(type, id, getShaderTexture, getInputRuntime),
+          (id, type) => getRuntimeAudioInfo(type, id, getInputRuntime),
         )
         gl.drawArrays(gl.TRIANGLES, 0, 6)
         gl.bindVertexArray(null)

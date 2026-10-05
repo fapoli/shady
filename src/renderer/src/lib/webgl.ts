@@ -14,6 +14,18 @@ export interface FboPair {
   texRead: WebGLTexture
 }
 
+export interface ChannelAudioInfo {
+  time: number
+  sampleRate: number
+}
+
+const DEFAULT_SAMPLE_RATE = 44100
+const textureSizes = new WeakMap<WebGLTexture, [number, number]>()
+
+export function registerTextureSize(tex: WebGLTexture, width: number, height: number): void {
+  textureSizes.set(tex, [width, height])
+}
+
 function createShader(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
   const shader = gl.createShader(type)!
   gl.shaderSource(shader, source)
@@ -70,6 +82,7 @@ function createFboTex(gl: WebGL2RenderingContext, width: number, height: number)
   const tex = gl.createTexture()!
   gl.bindTexture(gl.TEXTURE_2D, tex)
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, width, height, 0, gl.RGBA, gl.HALF_FLOAT, null)
+  registerTextureSize(tex, width, height)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
@@ -104,6 +117,7 @@ export function createImageTexture(gl: WebGL2RenderingContext, bitmap: ImageBitm
   const tex = gl.createTexture()!
   gl.bindTexture(gl.TEXTURE_2D, tex)
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bitmap)
+  registerTextureSize(tex, bitmap.width, bitmap.height)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT)
@@ -125,6 +139,7 @@ export function bindUniforms(
   slotTypes: Record<string, SlotType>,
   bufferIds: readonly string[],
   getChannelTex: (slotId: string, type: SlotType) => WebGLTexture | null,
+  getChannelAudio: (slotId: string, type: SlotType) => ChannelAudioInfo | null,
 ): void {
   const u = (name: string) => gl.getUniformLocation(program, name)
 
@@ -134,6 +149,9 @@ export function bindUniforms(
   const frameLoc     = u('iFrame')
   const mouseLoc     = u('iMouse')
   const dateLoc      = u('iDate')
+  const sampleRateLoc = u('iSampleRate')
+  const chanResLoc   = u('iChannelResolution')
+  const chanTimeLoc  = u('iChannelTime')
 
   if (resLoc)       gl.uniform2f(resLoc, width, height)
   if (timeLoc)      gl.uniform1f(timeLoc, elapsed)
@@ -146,14 +164,31 @@ export function bindUniforms(
     gl.uniform4f(dateLoc, now.getFullYear(), now.getMonth() + 1, now.getDate(), secs)
   }
 
+  const chanRes  = new Float32Array(12)
+  const chanTime = new Float32Array(4)
+  let sampleRate = DEFAULT_SAMPLE_RATE
+
   for (let i = 0; i < 4; i++) {
-    const chanLoc = u(`iChannel${i}`)
-    if (!chanLoc) continue
-    gl.activeTexture(gl.TEXTURE0 + i)
     const slotId = bufferIds[i]
     const type   = slotTypes[slotId] ?? 'shader'
     const tex = getChannelTex(slotId, type)
+    const size = tex ? textureSizes.get(tex) : undefined
+    if (size) { chanRes[i * 3] = size[0]; chanRes[i * 3 + 1] = size[1]; chanRes[i * 3 + 2] = 1 }
+
+    const audio = getChannelAudio(slotId, type)
+    if (audio) {
+      chanTime[i] = audio.time
+      sampleRate = audio.sampleRate
+    }
+
+    const chanLoc = u(`iChannel${i}`)
+    if (!chanLoc) continue
+    gl.activeTexture(gl.TEXTURE0 + i)
     gl.bindTexture(gl.TEXTURE_2D, tex)
     gl.uniform1i(chanLoc, i)
   }
+
+  if (sampleRateLoc) gl.uniform1f(sampleRateLoc, sampleRate)
+  if (chanResLoc)    gl.uniform3fv(chanResLoc, chanRes)
+  if (chanTimeLoc)   gl.uniform1fv(chanTimeLoc, chanTime)
 }

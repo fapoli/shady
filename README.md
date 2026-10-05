@@ -13,6 +13,7 @@ Shady is built around a quiet Monaco editor, a fullscreen preview, and Shadertoy
 
 - Frameless Electron app with a minimal dark interface
 - Monaco editor with GLSL syntax highlighting
+- GLSL autocomplete for Shady uniforms and built-in functions
 - WebGL2 fragment shader preview
 - Multi-pass shader buffers
 - Image, audio file, and microphone input channels
@@ -84,6 +85,9 @@ uniform float iTimeDelta;
 uniform int iFrame;
 uniform vec4 iMouse;
 uniform vec4 iDate;
+uniform float iSampleRate;
+uniform vec3 iChannelResolution[4];
+uniform float iChannelTime[4];
 uniform sampler2D iChannel0;
 uniform sampler2D iChannel1;
 uniform sampler2D iChannel2;
@@ -94,6 +98,57 @@ Audio and microphone inputs use a `512 x 2` texture:
 
 - row `0`: frequency data
 - row `1`: waveform data
+
+## Testing Shadertoy Shaders
+
+Most Shadertoy shaders (GLSL ES 3.0) run in Shady with a small wrapper.
+
+| Shadertoy | Shady |
+|---|---|
+| `void mainImage(out vec4 fragColor, in vec2 fragCoord)` | `void main()` writing to `out vec4 fragColor`. `fragCoord` is provided for you (`gl_FragCoord.xy`), do not declare it. |
+| Uniforms are predeclared | Declare them yourself (the starter shader already has the block). `iResolution` is a `vec2`, not a `vec3`. |
+| Image tab | `main` tab |
+| Buffer A-D tabs | `buffer a` - `buffer d` tabs |
+| Per-pass channel inputs | Global channels: `iChannel0-3` always read buffers A-D, and any slot can be replaced by an image, audio file, or microphone |
+
+To port a shader:
+
+1. Paste the Shadertoy code into the `main` tab, below the header and uniform block.
+2. Add a `main()` that calls `mainImage`:
+
+```glsl
+#version 300 es
+precision highp float;
+
+uniform vec2      iResolution;
+uniform float     iTime;
+uniform float     iTimeDelta;
+uniform int       iFrame;
+uniform vec4      iMouse;
+uniform vec4      iDate;
+uniform float     iSampleRate;
+uniform vec3      iChannelResolution[4];
+uniform float     iChannelTime[4];
+uniform sampler2D iChannel0;
+uniform sampler2D iChannel1;
+uniform sampler2D iChannel2;
+uniform sampler2D iChannel3;
+
+out vec4 fragColor;
+
+// --- Shadertoy code, unchanged ---
+void mainImage(out vec4 O, in vec2 fragCoord) {
+  // ...
+}
+// ---------------------------------
+
+void main() {
+  mainImage(fragColor, fragCoord);
+}
+```
+
+3. Buffers: paste each into its matching tab (same wrapper). Channels are global, so `iChannel0-3` always read buffers A-D.
+4. Press `Cmd+Enter` / `Ctrl+Enter` to run it.
 
 ## Validation
 

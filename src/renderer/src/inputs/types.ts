@@ -1,6 +1,7 @@
 import type { ComponentType, RefObject } from 'react'
 import type { LoadedChannel, SaveChannelEntry } from '../../../shared/types'
 import type { WebGLHandle } from '../hooks/webglTypes'
+import type { ChannelAudioInfo } from '../lib/webgl'
 
 export type SlotType = string
 
@@ -35,6 +36,7 @@ export interface InputRuntime {
   applyProjectChannel?(slotId: string, channel?: LoadedChannel): Promise<void>
   serializeProjectChannel?(slotId: string): Partial<SaveChannelEntry>
   getTexture(slotId: string): WebGLTexture | null
+  getAudioInfo?(slotId: string): ChannelAudioInfo | null
 }
 
 export interface InputModule {

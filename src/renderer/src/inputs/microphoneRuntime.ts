@@ -1,3 +1,4 @@
+import { registerTextureSize, type ChannelAudioInfo } from '../lib/webgl'
 import type { InputRuntimeContext } from './types'
 
 const ANALYSER_SIZE = 512
@@ -9,6 +10,7 @@ export interface MicrophoneInputRuntime {
   stop(slotIds: readonly string[]): void
   clear(slotId: string): void
   getTexture(slotId: string): WebGLTexture | null
+  getAudioInfo(slotId: string): ChannelAudioInfo | null
 }
 
 interface MicrophoneSlot {
@@ -50,6 +52,7 @@ export function createMicrophoneInputRuntime(
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
 
     gl.bindTexture(gl.TEXTURE_2D, null)
+    registerTextureSize(tex, ANALYSER_SIZE, 2)
     return tex
   }
 
@@ -149,5 +152,10 @@ export function createMicrophoneInputRuntime(
     return slots[slotId]?.texture ?? null
   }
 
-  return { activate, prepare, update, stop, clear, getTexture }
+  function getAudioInfo(slotId: string): ChannelAudioInfo | null {
+    const slot = slots[slotId]
+    return slot ? { time: 0, sampleRate: slot.context.sampleRate } : null
+  }
+
+  return { activate, prepare, update, stop, clear, getTexture, getAudioInfo }
 }

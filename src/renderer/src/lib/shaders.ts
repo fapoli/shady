@@ -1,3 +1,5 @@
+import { uniformDeclarations } from './glslCompletions'
+
 export const VERTEX_SHADER_SOURCE = `#version 300 es
 in vec2 a_position;
 void main() {
@@ -5,16 +7,7 @@ void main() {
 }`
 
 const UNIFORM_BLOCK = `
-uniform vec2      iResolution;
-uniform float     iTime;
-uniform float     iTimeDelta;
-uniform int       iFrame;
-uniform vec4      iMouse;
-uniform vec4      iDate;
-uniform sampler2D iChannel0;
-uniform sampler2D iChannel1;
-uniform sampler2D iChannel2;
-uniform sampler2D iChannel3;`
+${uniformDeclarations()}`
 
 export const STARTER_MAIN_SHADER = `#version 300 es
 precision highp float;

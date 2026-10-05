@@ -1,5 +1,6 @@
 import type { LoadedChannel, SaveChannelEntry } from '../../../shared/types'
 import { createAudioInstance, AudioInstance } from '../lib/audio'
+import type { ChannelAudioInfo } from '../lib/webgl'
 import { createFileChannelStore } from './fileChannelStore'
 import type { InputRuntimeContext } from './types'
 
@@ -15,6 +16,7 @@ export interface AudioInputRuntime {
   resume(slotIds: readonly string[]): void
   stop(slotIds: readonly string[]): void
   getTexture(slotId: string): WebGLTexture | null
+  getAudioInfo(slotId: string): ChannelAudioInfo | null
 }
 
 export function createAudioInputRuntime(
@@ -100,6 +102,10 @@ export function createAudioInputRuntime(
     return slotAudioTex[slotId] ?? null
   }
 
+  function getAudioInfo(slotId: string): ChannelAudioInfo | null {
+    return slotAudio[slotId]?.getInfo() ?? null
+  }
+
   return {
     loadFile,
     clear,
@@ -112,5 +118,6 @@ export function createAudioInputRuntime(
     resume,
     stop,
     getTexture,
+    getAudioInfo,
   }
 }
